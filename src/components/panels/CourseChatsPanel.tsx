@@ -242,6 +242,18 @@ const CourseChatsPanel = () => {
 
     loadMessages();
 
+    // Mark this group as seen (for unread badge)
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase
+        .from("course_members")
+        .update({ last_seen_at: new Date().toISOString() })
+        .eq("user_id", user.id)
+        .eq("course_id", activeCourse.id);
+      setGroups(prev => prev.map(g => g.id === activeCourse.id ? { ...g, unread_count: 0 } : g));
+    })();
+
     // Load members
     const loadMembers = async () => {
       const { data: mems } = await supabase
