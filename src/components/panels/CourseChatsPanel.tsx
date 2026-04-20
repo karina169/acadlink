@@ -13,6 +13,9 @@ interface CourseGroup {
   id: string;
   code: string;
   title: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  scope: string;
   department_name: string;
   level: string;
   member_count: number;
@@ -128,7 +131,7 @@ const CourseChatsPanel = () => {
 
       const { data: courses } = await supabase
         .from("courses")
-        .select("id, code, title, level, department_id")
+        .select("id, code, title, level, department_id, display_name, avatar_url, scope")
         .in("id", courseIds);
 
       if (!courses) {
@@ -136,11 +139,10 @@ const CourseChatsPanel = () => {
         return;
       }
 
-      const deptIds = [...new Set(courses.map(c => c.department_id))];
-      const { data: depts } = await supabase
-        .from("departments")
-        .select("id, name")
-        .in("id", deptIds);
+      const deptIds = courses.map(c => c.department_id).filter((x): x is string => !!x);
+      const { data: depts } = deptIds.length
+        ? await supabase.from("departments").select("id, name").in("id", deptIds)
+        : { data: [] };
 
       const deptMap = Object.fromEntries((depts || []).map(d => [d.id, d.name]));
 
@@ -184,8 +186,11 @@ const CourseChatsPanel = () => {
       const groupList: CourseGroup[] = courses.map(c => ({
         id: c.id,
         code: c.code,
-        title: c.title,
-        department_name: deptMap[c.department_id] || "Unknown",
+        title: c.display_name || c.title,
+        display_name: c.display_name,
+        avatar_url: c.avatar_url,
+        scope: c.scope || "level",
+        department_name: c.department_id ? (deptMap[c.department_id] || "Unknown") : "",
         level: c.level,
         member_count: countMap[c.id] || 0,
         last_message: lastMsgMap[c.id]?.text,
