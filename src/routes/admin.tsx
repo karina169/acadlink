@@ -660,7 +660,343 @@ function AcademicsPanel() {
   );
 }
 
-function RolesPanel() {
+// ============== GROUPS PANEL (chat group management) ==============
+type GroupRow = {
+  id: string; code: string; title: string; display_name: string | null;
+  avatar_url: string | null; scope: string; level: string;
+  department_id: string | null; faculty_id: string | null;
+};
+
+function GroupsPanel() {
+  const [groups, setGroups] = useState<GroupRow[]>([]);
+  const [faculties, setFaculties] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [profiles, setProfiles] = useState<any[]>([]);
+  const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [scopeFilter, setScopeFilter] = useState<string>("all");
+  const [editing, setEditing] = useState<GroupRow | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editAvatar, setEditAvatar] = useState("");
+  const [managingMembers, setManagingMembers] = useState<GroupRow | null>(null);
+  const [groupMembers, setGroupMembers] = useState<string[]>([]);
+  const [addMemberId, setAddMemberId] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [newG, setNewG] = useState({ code: "", title: "", scope: "level", faculty_id: "", department_id: "", level: "100" });
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    const [g, f, d, p, m] = await Promise.all([
+      supabase.from("courses").select("*").order("scope").order("title"),
+      supabase.from("faculties").select("id, name").order("name"),
+      supabase.from("departments").select("id, name, faculty_id").order("name"),
+      supabase.from("profiles").select("user_id, display_name, matric_number").order("display_name"),
+      supabase.from("course_members").select("course_id"),
+    ]);
+    setGroups((g.data || []) as GroupRow[]);
+    setFaculties(f.data || []); setDepartments(d.data || []); setProfiles(p.data || []);
+    const counts: Record<string, number> = {};
+    (m.data || []).forEach((x: any) => { counts[x.course_id] = (counts[x.course_id] || 0) + 1; });
+    setMemberCounts(counts);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  const facMap = Object.fromEntries(faculties.map((f) => [f.id, f.name]));
+  const deptMap = Object.fromEntries(departments.map((d) => [d.id, d.name]));
+  const nameOf = (uid: string) => {
+    const p = profiles.find((x) => x.user_id === uid);
+    return p?.display_name || p?.matric_number || uid.slice(0, 8);
+  };
+
+  const filtered = groups.filter((g) => {
+    if (scopeFilter !== "all" && g.scope !== scopeFilter) return false;
+    if (search) {
+      const s = search.toLowerCase();
+      const hay = `${g.title} ${g.display_name || ""} ${g.code} ${g.department_id ? deptMap[g.department_id] : ""} ${g.faculty_id ? facMap[g.faculty_id] : ""}`.toLowerCase();
+      if (!hay.includes(s)) return false;
+    }
+    return true;
+  });
+
+  const startEdit = (g: GroupRow) => {
+    setEditing(g);
+    setEditName(g.display_name || g.title);
+    setEditAvatar(g.avatar_url || "");
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    const { error } = await supabase.from("courses")
+      .update({ display_name: editName.trim() || null, avatar_url: editAvatar.trim() || null })
+      .eq("id", editing.id);
+    if (error) toast.error(error.message);
+    else { toast.success("Group updated"); setEditing(null); loadAll(); }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editing) return;
+    if (file.size > 2 * 1024 * 1024) { toast.error("Max 2MB"); return; }
+    const path = `group-avatars/${editing.id}-${Date.now()}.${file.name.split(".").pop()}`;
+    const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+    if (error) { toast.error(error.message); return; }
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    setEditAvatar(data.publicUrl);
+    toast.success("Avatar uploaded — click Save");
+  };
+
+  const deleteGroup = async (g: GroupRow) => {
+    if (!confirm(`Delete "${g.display_name || g.title}" and all its messages?`)) return;
+    await supabase.from("chat_messages").delete().eq("course_id", g.id);
+    await supabase.from("course_members").delete().eq("course_id", g.id);
+    const { error } = await supabase.from("courses").delete().eq("id", g.id);
+    if (error) toast.error(error.message); else { toast.success("Group deleted"); loadAll(); }
+  };
+
+  const openMembers = async (g: GroupRow) => {
+    setManagingMembers(g);
+    const { data } = await supabase.from("course_members").select("user_id").eq("course_id", g.id);
+    setGroupMembers((data || []).map((m) => m.user_id));
+  };
+
+  const addMember = async () => {
+    if (!addMemberId || !managingMembers) return;
+    const { error } = await supabase.from("course_members").insert({ course_id: managingMembers.id, user_id: addMemberId });
+    if (error) toast.error(error.message);
+    else { setGroupMembers((m) => [...m, addMemberId]); setAddMemberId(""); toast.success("Member added"); }
+  };
+
+  const removeMember = async (uid: string) => {
+    if (!managingMembers) return;
+    const { error } = await supabase.from("course_members").delete()
+      .eq("course_id", managingMembers.id).eq("user_id", uid);
+    if (error) toast.error(error.message);
+    else { setGroupMembers((m) => m.filter((x) => x !== uid)); }
+  };
+
+  const createGroup = async () => {
+    if (!newG.title.trim()) { toast.error("Title required"); return; }
+    const payload: any = {
+      code: newG.code.trim() || `G-${Date.now()}`,
+      title: newG.title.trim(),
+      display_name: newG.title.trim(),
+      scope: newG.scope,
+      semester: "1st",
+      units: 0,
+      level: newG.scope === "level" ? newG.level : "ALL",
+      department_id: newG.scope === "level" || newG.scope === "department" ? newG.department_id || null : null,
+      faculty_id: newG.scope === "faculty" ? newG.faculty_id || null : null,
+    };
+    if ((newG.scope === "level" || newG.scope === "department") && !payload.department_id) {
+      toast.error("Select a department"); return;
+    }
+    if (newG.scope === "faculty" && !payload.faculty_id) {
+      toast.error("Select a faculty"); return;
+    }
+    const { error } = await supabase.from("courses").insert(payload);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Group created");
+      setShowCreate(false);
+      setNewG({ code: "", title: "", scope: "level", faculty_id: "", department_id: "", level: "100" });
+      loadAll();
+    }
+  };
+
+  const scopeBadge = (s: string) => {
+    const map: Record<string, { label: string; cls: string }> = {
+      university: { label: "🌍 University", cls: "bg-accent/20 text-accent-foreground" },
+      faculty: { label: "🏛️ Faculty", cls: "bg-primary/15 text-primary" },
+      department: { label: "🎓 Dept General", cls: "bg-secondary text-secondary-foreground" },
+      level: { label: "📚 Level", cls: "bg-muted text-foreground" },
+    };
+    const v = map[s] || map.level;
+    return <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${v.cls}`}>{v.label}</span>;
+  };
+
+  if (loading) return <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-xl font-bold">Group Chats</h1>
+        <Button size="sm" onClick={() => setShowCreate((s) => !s)} className="gap-1"><Plus className="w-3.5 h-3.5" />New Group</Button>
+      </div>
+      <p className="text-sm text-muted-foreground mb-4">Rename, change avatars, manage members or delete any chat group.</p>
+
+      {showCreate && (
+        <Card className="mb-4">
+          <CardContent className="pt-4 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <select value={newG.scope} onChange={(e) => setNewG({ ...newG, scope: e.target.value })}
+                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+                <option value="level">Level (dept + level)</option>
+                <option value="department">Department General</option>
+                <option value="faculty">Faculty General</option>
+                <option value="university">University-wide</option>
+              </select>
+              <Input placeholder="Group title" value={newG.title} onChange={(e) => setNewG({ ...newG, title: e.target.value })} className="h-9 text-sm" />
+            </div>
+            {(newG.scope === "level" || newG.scope === "department") && (
+              <select value={newG.department_id} onChange={(e) => setNewG({ ...newG, department_id: e.target.value })}
+                className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+                <option value="">Select Department</option>
+                {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            )}
+            {newG.scope === "faculty" && (
+              <select value={newG.faculty_id} onChange={(e) => setNewG({ ...newG, faculty_id: e.target.value })}
+                className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+                <option value="">Select Faculty</option>
+                {faculties.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+            )}
+            {newG.scope === "level" && (
+              <select value={newG.level} onChange={(e) => setNewG({ ...newG, level: e.target.value })}
+                className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+                {["100", "200", "300", "400", "500"].map((l) => <option key={l} value={l}>{l} Level</option>)}
+              </select>
+            )}
+            <Input placeholder="Code (optional)" value={newG.code} onChange={(e) => setNewG({ ...newG, code: e.target.value })} className="h-9 text-sm" />
+            <div className="flex gap-2">
+              <Button size="sm" onClick={createGroup} className="flex-1">Create</Button>
+              <Button size="sm" variant="outline" onClick={() => setShowCreate(false)} className="flex-1">Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="flex gap-2 mb-3 flex-wrap">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Input placeholder="Search groups..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-9 text-sm" />
+        </div>
+        <select value={scopeFilter} onChange={(e) => setScopeFilter(e.target.value)}
+          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+          <option value="all">All scopes</option>
+          <option value="university">University</option>
+          <option value="faculty">Faculty</option>
+          <option value="department">Department General</option>
+          <option value="level">Level</option>
+        </select>
+      </div>
+
+      <div className="space-y-2">
+        {filtered.map((g) => (
+          <Card key={g.id}>
+            <CardContent className="p-3 flex items-center gap-3">
+              {g.avatar_url ? (
+                <img src={g.avatar_url} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" />
+              ) : (
+                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary to-primary/70 text-primary-foreground flex items-center justify-center font-bold text-xs shrink-0">
+                  {g.scope === "university" ? "🌍" : g.scope === "faculty" ? "🏛️" : g.level === "ALL" ? "GEN" : `${g.level}L`}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-sm truncate">{g.display_name || g.title}</span>
+                  {scopeBadge(g.scope)}
+                </div>
+                <div className="text-[11px] text-muted-foreground truncate">
+                  {g.code} · {g.faculty_id ? facMap[g.faculty_id] : g.department_id ? deptMap[g.department_id] : "All users"} · {memberCounts[g.id] || 0} members
+                </div>
+              </div>
+              <div className="flex gap-1 shrink-0">
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openMembers(g)} title="Manage members">
+                  <Users className="w-3.5 h-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => startEdit(g)} title="Rename / avatar">
+                  <Edit className="w-3.5 h-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:text-destructive" onClick={() => deleteGroup(g)}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+        {filtered.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">No groups found.</p>}
+      </div>
+
+      {/* Edit modal */}
+      {editing && (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4" onClick={() => setEditing(null)}>
+          <Card className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Edit group</CardTitle>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditing(null)}><X className="w-4 h-4" /></Button>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-3">
+                {editAvatar ? (
+                  <img src={editAvatar} alt="" className="w-16 h-16 rounded-full object-cover" />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center text-xs font-bold">No img</div>
+                )}
+                <label className="flex-1 text-xs cursor-pointer">
+                  <span className="block mb-1 font-medium">Avatar (max 2MB)</span>
+                  <input type="file" accept="image/*" onChange={handleAvatarUpload} className="text-xs" />
+                </label>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Display name</label>
+                <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-9 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Avatar URL (optional)</label>
+                <Input value={editAvatar} onChange={(e) => setEditAvatar(e.target.value)} placeholder="https://..." className="h-9 text-sm" />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button size="sm" onClick={saveEdit} className="flex-1 gap-1"><Check className="w-3.5 h-3.5" />Save</Button>
+                <Button size="sm" variant="outline" onClick={() => setEditing(null)} className="flex-1">Cancel</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Members modal */}
+      {managingMembers && (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4" onClick={() => setManagingMembers(null)}>
+          <Card className="w-full max-w-md max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-base truncate">Members · {managingMembers.display_name || managingMembers.title}</CardTitle>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setManagingMembers(null)}><X className="w-4 h-4" /></Button>
+            </CardHeader>
+            <CardContent className="space-y-3 overflow-y-auto">
+              <div className="flex gap-2">
+                <select value={addMemberId} onChange={(e) => setAddMemberId(e.target.value)}
+                  className="flex-1 h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+                  <option value="">Add user...</option>
+                  {profiles.filter((p) => !groupMembers.includes(p.user_id)).map((p) => (
+                    <option key={p.user_id} value={p.user_id}>{p.display_name || p.matric_number || p.user_id.slice(0, 8)}</option>
+                  ))}
+                </select>
+                <Button size="sm" onClick={addMember} disabled={!addMemberId}>Add</Button>
+              </div>
+              <div className="text-xs text-muted-foreground">{groupMembers.length} members</div>
+              <div className="space-y-1">
+                {groupMembers.map((uid) => (
+                  <div key={uid} className="flex items-center justify-between bg-muted/40 rounded-md px-3 py-2">
+                    <span className="text-sm truncate">{nameOf(uid)}</span>
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-destructive" onClick={() => removeMember(uid)}>
+                      <X className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+// ==============================================================
+
   const [roles, setRoles] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
