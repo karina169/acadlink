@@ -347,11 +347,84 @@ const CourseChatsPanel = () => {
     setIsRecording(false);
   };
 
+  const openCreateForm = async () => {
+    if (!faculties.length) {
+      const [f, d] = await Promise.all([
+        supabase.from("faculties").select("id, name").order("name"),
+        supabase.from("departments").select("id, name, faculty_id").order("name"),
+      ]);
+      setFaculties(f.data || []);
+      setDepartments(d.data || []);
+    }
+    setShowCreate(true);
+  };
+
+  const createGroup = async () => {
+    if (!newGroup.code.trim() || !newGroup.title.trim() || !newGroup.department_id) {
+      toast.error("Code, title and department are required"); return;
+    }
+    const { data, error } = await supabase.from("courses").insert({
+      code: newGroup.code.trim(), title: newGroup.title.trim(),
+      department_id: newGroup.department_id, level: newGroup.level,
+      semester: newGroup.semester, units: newGroup.units,
+    }).select().single();
+    if (error) { toast.error(error.message); return; }
+    if (data) await supabase.from("course_members").insert({ course_id: data.id, user_id: currentUserId });
+    toast.success("Group chat created");
+    setShowCreate(false);
+    setNewGroup({ code: "", title: "", faculty_id: "", department_id: "", level: "100", semester: "1st", units: 3 });
+    window.location.reload();
+  };
+
   // GROUP LIST VIEW
   if (!activeCourse) {
+    const filteredDepts = newGroup.faculty_id ? departments.filter(d => d.faculty_id === newGroup.faculty_id) : departments;
     return (
       <div>
-        <h2 className="font-syne text-lg font-bold mb-4">💬 Course Group Chats</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-syne text-lg font-bold">💬 Course Group Chats</h2>
+          {canCreateGroup && (
+            <Button size="sm" onClick={openCreateForm} className="gap-1 h-8 text-xs">
+              <Users className="w-3 h-3" /> New Group
+            </Button>
+          )}
+        </div>
+
+        {showCreate && (
+          <div className="content-card mb-3 space-y-2">
+            <div className="text-xs font-semibold mb-1">Create Course Group Chat</div>
+            <select value={newGroup.faculty_id} onChange={e => setNewGroup({ ...newGroup, faculty_id: e.target.value, department_id: "" })}
+              className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+              <option value="">Select Faculty</option>
+              {faculties.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+            <select value={newGroup.department_id} onChange={e => setNewGroup({ ...newGroup, department_id: e.target.value })}
+              className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm" disabled={!newGroup.faculty_id}>
+              <option value="">Select Department</option>
+              {filteredDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+            <div className="grid grid-cols-2 gap-2">
+              <Input placeholder="Code (e.g. CSC101)" value={newGroup.code} onChange={e => setNewGroup({ ...newGroup, code: e.target.value })} className="h-9 text-sm" />
+              <Input placeholder="Title" value={newGroup.title} onChange={e => setNewGroup({ ...newGroup, title: e.target.value })} className="h-9 text-sm" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <select value={newGroup.level} onChange={e => setNewGroup({ ...newGroup, level: e.target.value })}
+                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+                {["100", "200", "300", "400", "500"].map(l => <option key={l} value={l}>{l} Level</option>)}
+              </select>
+              <select value={newGroup.semester} onChange={e => setNewGroup({ ...newGroup, semester: e.target.value })}
+                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+                <option value="1st">1st Semester</option>
+                <option value="2nd">2nd Semester</option>
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={createGroup} className="flex-1">Create</Button>
+              <Button size="sm" variant="outline" onClick={() => setShowCreate(false)} className="flex-1">Cancel</Button>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex justify-center py-10">
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -359,16 +432,13 @@ const CourseChatsPanel = () => {
         ) : groups.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground text-sm">
             <p>No course groups yet.</p>
-            <p className="mt-1 text-xs">Groups are created by admins. You'll be auto-joined based on your department & level.</p>
+            <p className="mt-1 text-xs">Groups are auto-joined based on your department & level. Admins can create new ones.</p>
           </div>
         ) : (
           <div className="space-y-2">
             {groups.map(g => (
-              <button
-                key={g.id}
-                onClick={() => setActiveCourse(g)}
-                className="w-full bg-card border border-border rounded-xl p-3.5 flex items-center gap-3 hover:border-primary/50 transition-all text-left"
-              >
+              <button key={g.id} onClick={() => setActiveCourse(g)}
+                className="w-full bg-card border border-border rounded-xl p-3.5 flex items-center gap-3 hover:border-primary/50 transition-all text-left">
                 <div className="w-11 h-11 rounded-xl bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0">
                   {g.code.split(" ")[0]?.slice(0, 3)}
                 </div>
@@ -376,11 +446,9 @@ const CourseChatsPanel = () => {
                   <div className="text-[13px] font-semibold truncate">{g.code} — {g.title}</div>
                   <div className="text-[11px] text-muted-foreground truncate">{g.department_name} · {g.level} Level</div>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                  <Badge variant="secondary" className="text-[10px]">
-                    <Users className="w-3 h-3 mr-1" />{g.member_count}
-                  </Badge>
-                </div>
+                <Badge variant="secondary" className="text-[10px]">
+                  <Users className="w-3 h-3 mr-1" />{g.member_count}
+                </Badge>
               </button>
             ))}
           </div>
