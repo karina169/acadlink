@@ -997,6 +997,7 @@ function GroupsPanel() {
 }
 // ==============================================================
 
+function RolesPanel() {
   const [roles, setRoles] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
