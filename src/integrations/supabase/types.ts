@@ -164,31 +164,43 @@ export type Database = {
       }
       courses: {
         Row: {
+          avatar_url: string | null
           code: string
           created_at: string
-          department_id: string
+          department_id: string | null
+          display_name: string | null
+          faculty_id: string | null
           id: string
           level: string
+          scope: string
           semester: string
           title: string
           units: number
         }
         Insert: {
+          avatar_url?: string | null
           code: string
           created_at?: string
-          department_id: string
+          department_id?: string | null
+          display_name?: string | null
+          faculty_id?: string | null
           id?: string
           level: string
+          scope?: string
           semester?: string
           title: string
           units?: number
         }
         Update: {
+          avatar_url?: string | null
           code?: string
           created_at?: string
-          department_id?: string
+          department_id?: string | null
+          display_name?: string | null
+          faculty_id?: string | null
           id?: string
           level?: string
+          scope?: string
           semester?: string
           title?: string
           units?: number
@@ -199,6 +211,13 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "courses_faculty_id_fkey"
+            columns: ["faculty_id"]
+            isOneToOne: false
+            referencedRelation: "faculties"
             referencedColumns: ["id"]
           },
         ]
