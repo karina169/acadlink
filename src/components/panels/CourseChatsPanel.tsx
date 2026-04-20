@@ -510,14 +510,22 @@ const CourseChatsPanel = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <div className="text-[14px] font-semibold truncate text-foreground">{g.title}</div>
-                      {ts && <span className="text-[10px] text-muted-foreground shrink-0">{ts}</span>}
+                      <div className={`text-[14px] truncate text-foreground ${g.unread_count > 0 ? "font-bold" : "font-semibold"}`}>{g.title}</div>
+                      {ts && (
+                        <span className={`text-[10px] shrink-0 ${g.unread_count > 0 ? "text-primary font-semibold" : "text-muted-foreground"}`}>{ts}</span>
+                      )}
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-[12px] text-muted-foreground truncate">{subtitle}</div>
-                      <Badge variant="secondary" className="text-[10px] h-5 px-1.5 shrink-0">
-                        <Users className="w-2.5 h-2.5 mr-0.5" />{g.member_count}
-                      </Badge>
+                      <div className={`text-[12px] truncate ${g.unread_count > 0 ? "text-foreground font-medium" : "text-muted-foreground"}`}>{subtitle}</div>
+                      {g.unread_count > 0 ? (
+                        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shrink-0">
+                          {g.unread_count > 99 ? "99+" : g.unread_count}
+                        </span>
+                      ) : (
+                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 shrink-0">
+                          <Users className="w-2.5 h-2.5 mr-0.5" />{g.member_count}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 </button>
