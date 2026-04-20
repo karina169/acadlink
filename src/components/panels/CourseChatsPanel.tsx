@@ -46,6 +46,11 @@ const CourseChatsPanel = () => {
   const [showMembers, setShowMembers] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [canCreateGroup, setCanCreateGroup] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [faculties, setFaculties] = useState<{ id: string; name: string }[]>([]);
+  const [departments, setDepartments] = useState<{ id: string; name: string; faculty_id: string }[]>([]);
+  const [newGroup, setNewGroup] = useState({ code: "", title: "", faculty_id: "", department_id: "", level: "100", semester: "1st", units: 3 });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -61,6 +66,11 @@ const CourseChatsPanel = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setCurrentUserId(user.id);
+
+      // Check if user is admin/group_admin (can create chat groups)
+      const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
+      const isAdmin = roles?.some(r => r.role === "admin" || r.role === "group_admin") || false;
+      setCanCreateGroup(isAdmin);
 
       const { data: memberships } = await supabase
         .from("course_members")
