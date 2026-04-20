@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import logo from "@/assets/acadlink-logo.png";
 
 interface AuthScreenProps {
   onLogin: () => void;
@@ -59,13 +60,13 @@ const AuthScreen = ({ onLogin }: AuthScreenProps) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
-      <div className="bg-card border border-border rounded-xl p-8 w-full max-w-[420px] shadow-sm">
-        <div className="flex items-center gap-2 mb-1">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">A</div>
-          <span className="text-lg font-semibold tracking-tight">AcadLink</span>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted/30 to-primary/5 px-4 py-8">
+      <div className="bg-card border border-border rounded-2xl p-8 w-full max-w-[420px] shadow-xl">
+        <div className="flex flex-col items-center text-center mb-6">
+          <img src={logo} alt="AcadLink" className="w-20 h-20 object-contain mb-3 drop-shadow-md" />
+          <div className="text-xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">AcadLink</div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Sokoto State University — Learn · Connect · Succeed</p>
         </div>
-        <p className="text-xs text-muted-foreground mb-6">Sokoto State University — Student Platform</p>
 
         <h1 className="text-xl font-semibold mb-1">
           {tab === "signin" ? "Welcome back" : "Create your account"}
