@@ -152,6 +152,25 @@ const CourseChatsPanel = () => {
         countMap[m.course_id] = (countMap[m.course_id] || 0) + 1;
       });
 
+      // Fetch last message per course (latest 1 per group)
+      const { data: recentMsgs } = await supabase
+        .from("chat_messages")
+        .select("course_id, content, message_type, created_at")
+        .in("course_id", courseIds)
+        .order("created_at", { ascending: false })
+        .limit(500);
+
+      const lastMsgMap: Record<string, { text: string; at: string }> = {};
+      (recentMsgs || []).forEach(m => {
+        if (lastMsgMap[m.course_id]) return;
+        let preview = m.content || "";
+        if (m.message_type === "image") preview = "📷 Photo";
+        else if (m.message_type === "video") preview = "🎥 Video";
+        else if (m.message_type === "audio") preview = "🎙️ Voice note";
+        else if (m.message_type === "document") preview = "📎 " + (m.content || "Document");
+        lastMsgMap[m.course_id] = { text: preview, at: m.created_at };
+      });
+
       const groupList: CourseGroup[] = courses.map(c => ({
         id: c.id,
         code: c.code,
@@ -159,7 +178,17 @@ const CourseChatsPanel = () => {
         department_name: deptMap[c.department_id] || "Unknown",
         level: c.level,
         member_count: countMap[c.id] || 0,
+        last_message: lastMsgMap[c.id]?.text,
+        last_message_at: lastMsgMap[c.id]?.at,
       }));
+
+      // Sort: groups with messages first, by recency; then the rest alphabetically
+      groupList.sort((a, b) => {
+        if (a.last_message_at && b.last_message_at) return b.last_message_at.localeCompare(a.last_message_at);
+        if (a.last_message_at) return -1;
+        if (b.last_message_at) return 1;
+        return a.title.localeCompare(b.title);
+      });
 
       setGroups(groupList);
       setLoading(false);
