@@ -13,6 +13,9 @@ interface CourseGroup {
   id: string;
   code: string;
   title: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  scope: string;
   department_name: string;
   level: string;
   member_count: number;
@@ -128,7 +131,7 @@ const CourseChatsPanel = () => {
 
       const { data: courses } = await supabase
         .from("courses")
-        .select("id, code, title, level, department_id")
+        .select("id, code, title, level, department_id, display_name, avatar_url, scope")
         .in("id", courseIds);
 
       if (!courses) {
@@ -136,11 +139,10 @@ const CourseChatsPanel = () => {
         return;
       }
 
-      const deptIds = [...new Set(courses.map(c => c.department_id))];
-      const { data: depts } = await supabase
-        .from("departments")
-        .select("id, name")
-        .in("id", deptIds);
+      const deptIds = courses.map(c => c.department_id).filter((x): x is string => !!x);
+      const { data: depts } = deptIds.length
+        ? await supabase.from("departments").select("id, name").in("id", deptIds)
+        : { data: [] };
 
       const deptMap = Object.fromEntries((depts || []).map(d => [d.id, d.name]));
 
@@ -184,8 +186,11 @@ const CourseChatsPanel = () => {
       const groupList: CourseGroup[] = courses.map(c => ({
         id: c.id,
         code: c.code,
-        title: c.title,
-        department_name: deptMap[c.department_id] || "Unknown",
+        title: c.display_name || c.title,
+        display_name: c.display_name,
+        avatar_url: c.avatar_url,
+        scope: c.scope || "level",
+        department_name: c.department_id ? (deptMap[c.department_id] || "Unknown") : "",
         level: c.level,
         member_count: countMap[c.id] || 0,
         last_message: lastMsgMap[c.id]?.text,
@@ -489,8 +494,10 @@ const CourseChatsPanel = () => {
         ) : (
           <div className="space-y-1">
             {groups.map(g => {
-              const isGeneral = g.level === "ALL";
-              const initials = isGeneral ? "GEN" : `${g.level}L`;
+              const isUni = g.scope === "university";
+              const isFac = g.scope === "faculty";
+              const isGeneral = g.level === "ALL" || isUni || isFac;
+              const initials = isUni ? "🌍" : isFac ? "🏛️" : isGeneral ? "GEN" : `${g.level}L`;
               const subtitle = g.last_message
                 ? g.last_message
                 : `${g.member_count} member${g.member_count === 1 ? "" : "s"} · tap to start chatting`;
@@ -501,13 +508,21 @@ const CourseChatsPanel = () => {
                   onClick={() => setActiveCourse(g)}
                   className="w-full bg-card hover:bg-accent/50 active:bg-accent rounded-xl p-3 flex items-center gap-3 transition-colors text-left border border-transparent hover:border-border"
                 >
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0 shadow-sm ${
-                    isGeneral
-                      ? "bg-gradient-to-br from-primary to-primary/70 text-primary-foreground"
-                      : "bg-gradient-to-br from-secondary to-muted text-foreground"
-                  }`}>
-                    {initials}
-                  </div>
+                  {g.avatar_url ? (
+                    <img src={g.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover shrink-0 shadow-sm" />
+                  ) : (
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-[12px] shrink-0 shadow-sm ${
+                      isUni
+                        ? "bg-gradient-to-br from-accent to-primary text-primary-foreground"
+                        : isFac
+                          ? "bg-gradient-to-br from-primary/80 to-accent text-primary-foreground"
+                          : isGeneral
+                            ? "bg-gradient-to-br from-primary to-primary/70 text-primary-foreground"
+                            : "bg-gradient-to-br from-secondary to-muted text-foreground"
+                    }`}>
+                      {initials}
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-0.5">
                       <div className={`text-[14px] truncate text-foreground ${g.unread_count > 0 ? "font-bold" : "font-semibold"}`}>{g.title}</div>
