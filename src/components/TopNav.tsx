@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Menu, Search, Bell, LogOut, ChevronDown } from "lucide-react";
+import { Menu, Search, Bell, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import logo from "@/assets/acadlink-logo.png";
 
 interface TopNavProps {
   userInitials: string;
@@ -32,11 +33,11 @@ const TopNav = ({ userInitials, onMenuToggle }: TopNavProps) => {
           <Menu className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-            A
+          <img src={logo} alt="AcadLink" className="w-9 h-9 object-contain rounded-lg" />
+          <div className="leading-tight hidden sm:block">
+            <div className="text-base font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">AcadLink</div>
+            <div className="text-[10px] text-muted-foreground -mt-0.5 hidden md:block">Sokoto State University</div>
           </div>
-          <span className="text-base font-semibold tracking-tight hidden sm:block">AcadLink</span>
-          <span className="text-xs text-muted-foreground hidden md:block">Sokoto State University</span>
         </div>
       </div>
 

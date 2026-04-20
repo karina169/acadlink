@@ -38,6 +38,8 @@ export const Route = createRootRoute({
       { name: "twitter:card", content: "summary" },
     ],
     links: [
+      { rel: "icon", type: "image/png", href: "/acadlink-logo.png" },
+      { rel: "apple-touch-icon", href: "/acadlink-logo.png" },
       {
         rel: "stylesheet",
         href: appCss,
