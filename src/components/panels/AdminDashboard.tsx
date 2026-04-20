@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { Shield, Users, FileText, BarChart3, GraduationCap, Building2, BookOpen, Trash2, Plus, ChevronDown } from "lucide-react";
+import { Shield, Users, FileText, BarChart3, GraduationCap, Building2, BookOpen, Trash2, Plus, ChevronDown, Newspaper, UserCog, Pin, PinOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
-type Tab = "overview" | "users" | "content" | "faculties";
+type Tab = "overview" | "users" | "content" | "faculties" | "roles" | "news";
 
 const AdminDashboard = () => {
   const [tab, setTab] = useState<Tab>("overview");
@@ -17,15 +17,17 @@ const AdminDashboard = () => {
         <p className="text-sm text-muted-foreground mt-0.5">Manage your platform</p>
       </div>
 
-      <div className="flex gap-1 mb-5 border-b border-border">
+      <div className="flex gap-1 mb-5 border-b border-border overflow-x-auto">
         {([
           { key: "overview", label: "Overview", icon: BarChart3 },
           { key: "users", label: "Users", icon: Users },
+          { key: "roles", label: "Roles", icon: UserCog },
           { key: "content", label: "Content", icon: FileText },
-          { key: "faculties", label: "Academic Structure", icon: GraduationCap },
+          { key: "news", label: "News", icon: Newspaper },
+          { key: "faculties", label: "Academics", icon: GraduationCap },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setTab(key)}
-            className={`px-4 py-2.5 text-sm font-medium flex items-center gap-1.5 transition-colors border-b-2 -mb-px bg-transparent border-x-0 border-t-0 cursor-pointer ${
+            className={`px-4 py-2.5 text-sm font-medium flex items-center gap-1.5 transition-colors border-b-2 -mb-px bg-transparent border-x-0 border-t-0 cursor-pointer whitespace-nowrap ${
               tab === key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}>
             <Icon className="w-4 h-4" />{label}
@@ -35,7 +37,9 @@ const AdminDashboard = () => {
 
       {tab === "overview" && <OverviewTab />}
       {tab === "users" && <UsersTab />}
+      {tab === "roles" && <RolesTab />}
       {tab === "content" && <ContentTab />}
+      {tab === "news" && <NewsTab />}
       {tab === "faculties" && <FacultiesTab />}
     </div>
   );
