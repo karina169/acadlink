@@ -10,9 +10,7 @@ interface NavItem {
 
 const mainNav: NavItem[] = [
   { icon: LayoutDashboard, label: "Feed", key: "feed" },
-  { icon: FileText, label: "Handouts", key: "handouts" },
   { icon: BookOpen, label: "Past Questions", key: "past-questions" },
-  { icon: Calendar, label: "Timetable", key: "timetable" },
 ];
 
 const academicsNav: NavItem[] = [
