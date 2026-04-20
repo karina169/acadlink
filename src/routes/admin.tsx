@@ -26,7 +26,7 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-type AdminTab = "overview" | "users" | "posts" | "news" | "academics" | "roles";
+type AdminTab = "overview" | "users" | "posts" | "news" | "academics" | "groups" | "roles";
 
 const adminTabs: { key: AdminTab; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: BarChart3 },
@@ -34,6 +34,7 @@ const adminTabs: { key: AdminTab; label: string; icon: React.ElementType }[] = [
   { key: "posts", label: "Posts", icon: FileText },
   { key: "news", label: "Campus News", icon: Newspaper },
   { key: "academics", label: "Academics", icon: GraduationCap },
+  { key: "groups", label: "Group Chats", icon: MessageCircle },
   { key: "roles", label: "User Roles", icon: Shield },
 ];
 
@@ -157,6 +158,7 @@ function AdminPage() {
           {tab === "posts" && <PostsPanel />}
           {tab === "news" && <NewsPanel />}
           {tab === "academics" && <AcademicsPanel />}
+          {tab === "groups" && <GroupsPanel />}
           {tab === "roles" && <RolesPanel />}
         </main>
       </div>
