@@ -271,7 +271,7 @@ const CourseChatsPanel = () => {
     const path = `${activeCourse.id}/${Date.now()}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
-      .from("chat-media")
+      .from("chat-files")
       .upload(path, file);
 
     if (uploadError) {
@@ -280,7 +280,7 @@ const CourseChatsPanel = () => {
       return;
     }
 
-    const { data: urlData } = supabase.storage.from("chat-media").getPublicUrl(path);
+    const { data: urlData } = supabase.storage.from("chat-files").getPublicUrl(path);
 
     let msgType = "document";
     if (file.type.startsWith("image/")) msgType = "image";
@@ -312,8 +312,8 @@ const CourseChatsPanel = () => {
 
         if (!activeCourse) return;
         const path = `${activeCourse.id}/voice_${Date.now()}.webm`;
-        await supabase.storage.from("chat-media").upload(path, blob);
-        const { data: urlData } = supabase.storage.from("chat-media").getPublicUrl(path);
+        await supabase.storage.from("chat-files").upload(path, blob);
+        const { data: urlData } = supabase.storage.from("chat-files").getPublicUrl(path);
 
         await supabase.from("chat_messages").insert({
           course_id: activeCourse.id,
