@@ -135,18 +135,21 @@ export type Database = {
           course_id: string
           id: string
           joined_at: string
+          last_seen_at: string
           user_id: string
         }
         Insert: {
           course_id: string
           id?: string
           joined_at?: string
+          last_seen_at?: string
           user_id: string
         }
         Update: {
           course_id?: string
           id?: string
           joined_at?: string
+          last_seen_at?: string
           user_id?: string
         }
         Relationships: [
