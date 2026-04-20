@@ -111,10 +111,10 @@ const CourseChatsPanel = () => {
         }
       }
 
-      // Re-fetch memberships
+      // Re-fetch memberships (with last_seen_at for unread counts)
       const { data: myMemberships } = await supabase
         .from("course_members")
-        .select("course_id")
+        .select("course_id, last_seen_at")
         .eq("user_id", user.id);
 
       if (!myMemberships?.length) {
@@ -123,6 +123,8 @@ const CourseChatsPanel = () => {
       }
 
       const courseIds = myMemberships.map(m => m.course_id);
+      const lastSeenMap: Record<string, string> = {};
+      myMemberships.forEach(m => { lastSeenMap[m.course_id] = m.last_seen_at; });
 
       const { data: courses } = await supabase
         .from("courses")
@@ -153,23 +155,30 @@ const CourseChatsPanel = () => {
         countMap[m.course_id] = (countMap[m.course_id] || 0) + 1;
       });
 
-      // Fetch last message per course (latest 1 per group)
+      // Fetch recent messages per course (limit 500 covers last + unread counting)
       const { data: recentMsgs } = await supabase
         .from("chat_messages")
-        .select("course_id, content, message_type, created_at")
+        .select("course_id, user_id, content, message_type, created_at")
         .in("course_id", courseIds)
         .order("created_at", { ascending: false })
         .limit(500);
 
       const lastMsgMap: Record<string, { text: string; at: string }> = {};
+      const unreadMap: Record<string, number> = {};
       (recentMsgs || []).forEach(m => {
-        if (lastMsgMap[m.course_id]) return;
-        let preview = m.content || "";
-        if (m.message_type === "image") preview = "📷 Photo";
-        else if (m.message_type === "video") preview = "🎥 Video";
-        else if (m.message_type === "audio") preview = "🎙️ Voice note";
-        else if (m.message_type === "document") preview = "📎 " + (m.content || "Document");
-        lastMsgMap[m.course_id] = { text: preview, at: m.created_at };
+        if (!lastMsgMap[m.course_id]) {
+          let preview = m.content || "";
+          if (m.message_type === "image") preview = "📷 Photo";
+          else if (m.message_type === "video") preview = "🎥 Video";
+          else if (m.message_type === "audio") preview = "🎙️ Voice note";
+          else if (m.message_type === "document") preview = "📎 " + (m.content || "Document");
+          lastMsgMap[m.course_id] = { text: preview, at: m.created_at };
+        }
+        // Count unread: messages newer than last_seen_at, not authored by current user
+        const seen = lastSeenMap[m.course_id];
+        if (m.user_id !== user.id && (!seen || m.created_at > seen)) {
+          unreadMap[m.course_id] = (unreadMap[m.course_id] || 0) + 1;
+        }
       });
 
       const groupList: CourseGroup[] = courses.map(c => ({
@@ -181,6 +190,7 @@ const CourseChatsPanel = () => {
         member_count: countMap[c.id] || 0,
         last_message: lastMsgMap[c.id]?.text,
         last_message_at: lastMsgMap[c.id]?.at,
+        unread_count: unreadMap[c.id] || 0,
       }));
 
       // Sort: groups with messages first, by recency; then the rest alphabetically
