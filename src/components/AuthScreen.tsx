@@ -36,10 +36,13 @@ const AuthScreen = ({ onLogin }: AuthScreenProps) => {
     try {
       if (tab === "register") {
         const deptName = departments.find(d => d.id === department)?.name || "";
+        const facName = faculties.find(f => f.id === faculty)?.name || "";
+        const redirectUrl = `${window.location.origin}/`;
         const { error } = await supabase.auth.signUp({
           email, password,
           options: {
-            data: { display_name: fullName, department: deptName, level, matric_number: matricNumber },
+            emailRedirectTo: redirectUrl,
+            data: { display_name: fullName, faculty: facName, department: deptName, level, matric_number: matricNumber },
           },
         });
         if (error) throw error;
