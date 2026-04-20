@@ -464,22 +464,42 @@ const CourseChatsPanel = () => {
             <p className="mt-1 text-xs">Groups are auto-joined based on your department & level. Admins can create new ones.</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {groups.map(g => (
-              <button key={g.id} onClick={() => setActiveCourse(g)}
-                className="w-full bg-card border border-border rounded-xl p-3.5 flex items-center gap-3 hover:border-primary/50 transition-all text-left">
-                <div className="w-11 h-11 rounded-xl bg-primary/20 flex items-center justify-center text-primary font-bold text-sm shrink-0">
-                  {g.code.split(" ")[0]?.slice(0, 3)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-semibold truncate">{g.code} — {g.title}</div>
-                  <div className="text-[11px] text-muted-foreground truncate">{g.department_name} · {g.level} Level</div>
-                </div>
-                <Badge variant="secondary" className="text-[10px]">
-                  <Users className="w-3 h-3 mr-1" />{g.member_count}
-                </Badge>
-              </button>
-            ))}
+          <div className="space-y-1">
+            {groups.map(g => {
+              const isGeneral = g.level === "ALL";
+              const initials = isGeneral ? "GEN" : `${g.level}L`;
+              const subtitle = g.last_message
+                ? g.last_message
+                : `${g.member_count} member${g.member_count === 1 ? "" : "s"} · tap to start chatting`;
+              const ts = g.last_message_at ? format(new Date(g.last_message_at), "HH:mm") : "";
+              return (
+                <button
+                  key={g.id}
+                  onClick={() => setActiveCourse(g)}
+                  className="w-full bg-card hover:bg-accent/50 active:bg-accent rounded-xl p-3 flex items-center gap-3 transition-colors text-left border border-transparent hover:border-border"
+                >
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0 shadow-sm ${
+                    isGeneral
+                      ? "bg-gradient-to-br from-primary to-primary/70 text-primary-foreground"
+                      : "bg-gradient-to-br from-secondary to-muted text-foreground"
+                  }`}>
+                    {initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <div className="text-[14px] font-semibold truncate text-foreground">{g.title}</div>
+                      {ts && <span className="text-[10px] text-muted-foreground shrink-0">{ts}</span>}
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[12px] text-muted-foreground truncate">{subtitle}</div>
+                      <Badge variant="secondary" className="text-[10px] h-5 px-1.5 shrink-0">
+                        <Users className="w-2.5 h-2.5 mr-0.5" />{g.member_count}
+                      </Badge>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
