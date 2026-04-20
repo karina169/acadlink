@@ -18,6 +18,7 @@ interface CourseGroup {
   member_count: number;
   last_message?: string;
   last_message_at?: string;
+  unread_count: number;
 }
 
 interface ChatMessage {
@@ -110,10 +111,10 @@ const CourseChatsPanel = () => {
         }
       }
 
-      // Re-fetch memberships
+      // Re-fetch memberships (with last_seen_at for unread counts)
       const { data: myMemberships } = await supabase
         .from("course_members")
-        .select("course_id")
+        .select("course_id, last_seen_at")
         .eq("user_id", user.id);
 
       if (!myMemberships?.length) {
@@ -122,6 +123,8 @@ const CourseChatsPanel = () => {
       }
 
       const courseIds = myMemberships.map(m => m.course_id);
+      const lastSeenMap: Record<string, string> = {};
+      myMemberships.forEach(m => { lastSeenMap[m.course_id] = m.last_seen_at; });
 
       const { data: courses } = await supabase
         .from("courses")
@@ -152,23 +155,30 @@ const CourseChatsPanel = () => {
         countMap[m.course_id] = (countMap[m.course_id] || 0) + 1;
       });
 
-      // Fetch last message per course (latest 1 per group)
+      // Fetch recent messages per course (limit 500 covers last + unread counting)
       const { data: recentMsgs } = await supabase
         .from("chat_messages")
-        .select("course_id, content, message_type, created_at")
+        .select("course_id, user_id, content, message_type, created_at")
         .in("course_id", courseIds)
         .order("created_at", { ascending: false })
         .limit(500);
 
       const lastMsgMap: Record<string, { text: string; at: string }> = {};
+      const unreadMap: Record<string, number> = {};
       (recentMsgs || []).forEach(m => {
-        if (lastMsgMap[m.course_id]) return;
-        let preview = m.content || "";
-        if (m.message_type === "image") preview = "📷 Photo";
-        else if (m.message_type === "video") preview = "🎥 Video";
-        else if (m.message_type === "audio") preview = "🎙️ Voice note";
-        else if (m.message_type === "document") preview = "📎 " + (m.content || "Document");
-        lastMsgMap[m.course_id] = { text: preview, at: m.created_at };
+        if (!lastMsgMap[m.course_id]) {
+          let preview = m.content || "";
+          if (m.message_type === "image") preview = "📷 Photo";
+          else if (m.message_type === "video") preview = "🎥 Video";
+          else if (m.message_type === "audio") preview = "🎙️ Voice note";
+          else if (m.message_type === "document") preview = "📎 " + (m.content || "Document");
+          lastMsgMap[m.course_id] = { text: preview, at: m.created_at };
+        }
+        // Count unread: messages newer than last_seen_at, not authored by current user
+        const seen = lastSeenMap[m.course_id];
+        if (m.user_id !== user.id && (!seen || m.created_at > seen)) {
+          unreadMap[m.course_id] = (unreadMap[m.course_id] || 0) + 1;
+        }
       });
 
       const groupList: CourseGroup[] = courses.map(c => ({
@@ -180,6 +190,7 @@ const CourseChatsPanel = () => {
         member_count: countMap[c.id] || 0,
         last_message: lastMsgMap[c.id]?.text,
         last_message_at: lastMsgMap[c.id]?.at,
+        unread_count: unreadMap[c.id] || 0,
       }));
 
       // Sort: groups with messages first, by recency; then the rest alphabetically
@@ -230,6 +241,18 @@ const CourseChatsPanel = () => {
     };
 
     loadMessages();
+
+    // Mark this group as seen (for unread badge)
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase
+        .from("course_members")
+        .update({ last_seen_at: new Date().toISOString() })
+        .eq("user_id", user.id)
+        .eq("course_id", activeCourse.id);
+      setGroups(prev => prev.map(g => g.id === activeCourse.id ? { ...g, unread_count: 0 } : g));
+    })();
 
     // Load members
     const loadMembers = async () => {
@@ -487,14 +510,22 @@ const CourseChatsPanel = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <div className="text-[14px] font-semibold truncate text-foreground">{g.title}</div>
-                      {ts && <span className="text-[10px] text-muted-foreground shrink-0">{ts}</span>}
+                      <div className={`text-[14px] truncate text-foreground ${g.unread_count > 0 ? "font-bold" : "font-semibold"}`}>{g.title}</div>
+                      {ts && (
+                        <span className={`text-[10px] shrink-0 ${g.unread_count > 0 ? "text-primary font-semibold" : "text-muted-foreground"}`}>{ts}</span>
+                      )}
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-[12px] text-muted-foreground truncate">{subtitle}</div>
-                      <Badge variant="secondary" className="text-[10px] h-5 px-1.5 shrink-0">
-                        <Users className="w-2.5 h-2.5 mr-0.5" />{g.member_count}
-                      </Badge>
+                      <div className={`text-[12px] truncate ${g.unread_count > 0 ? "text-foreground font-medium" : "text-muted-foreground"}`}>{subtitle}</div>
+                      {g.unread_count > 0 ? (
+                        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shrink-0">
+                          {g.unread_count > 99 ? "99+" : g.unread_count}
+                        </span>
+                      ) : (
+                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 shrink-0">
+                          <Users className="w-2.5 h-2.5 mr-0.5" />{g.member_count}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 </button>
