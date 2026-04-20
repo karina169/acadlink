@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { Shield, Users, FileText, BarChart3, GraduationCap, Building2, BookOpen, Trash2, Plus, ChevronDown } from "lucide-react";
+import { Shield, Users, FileText, BarChart3, GraduationCap, Building2, BookOpen, Trash2, Plus, ChevronDown, Newspaper, UserCog, Pin, PinOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
-type Tab = "overview" | "users" | "content" | "faculties";
+type Tab = "overview" | "users" | "content" | "faculties" | "roles" | "news";
 
 const AdminDashboard = () => {
   const [tab, setTab] = useState<Tab>("overview");
@@ -17,15 +17,17 @@ const AdminDashboard = () => {
         <p className="text-sm text-muted-foreground mt-0.5">Manage your platform</p>
       </div>
 
-      <div className="flex gap-1 mb-5 border-b border-border">
+      <div className="flex gap-1 mb-5 border-b border-border overflow-x-auto">
         {([
           { key: "overview", label: "Overview", icon: BarChart3 },
           { key: "users", label: "Users", icon: Users },
+          { key: "roles", label: "Roles", icon: UserCog },
           { key: "content", label: "Content", icon: FileText },
-          { key: "faculties", label: "Academic Structure", icon: GraduationCap },
+          { key: "news", label: "News", icon: Newspaper },
+          { key: "faculties", label: "Academics", icon: GraduationCap },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setTab(key)}
-            className={`px-4 py-2.5 text-sm font-medium flex items-center gap-1.5 transition-colors border-b-2 -mb-px bg-transparent border-x-0 border-t-0 cursor-pointer ${
+            className={`px-4 py-2.5 text-sm font-medium flex items-center gap-1.5 transition-colors border-b-2 -mb-px bg-transparent border-x-0 border-t-0 cursor-pointer whitespace-nowrap ${
               tab === key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}>
             <Icon className="w-4 h-4" />{label}
@@ -35,7 +37,9 @@ const AdminDashboard = () => {
 
       {tab === "overview" && <OverviewTab />}
       {tab === "users" && <UsersTab />}
+      {tab === "roles" && <RolesTab />}
       {tab === "content" && <ContentTab />}
+      {tab === "news" && <NewsTab />}
       {tab === "faculties" && <FacultiesTab />}
     </div>
   );
@@ -307,6 +311,159 @@ const FacultiesTab = () => {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+};
+
+const RolesTab = () => {
+  const [users, setUsers] = useState<any[]>([]);
+  const [roles, setRoles] = useState<Record<string, string[]>>({});
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    const [u, r] = await Promise.all([
+      supabase.from("profiles").select("user_id, display_name, matric_number, department").order("created_at", { ascending: false }).limit(100),
+      supabase.from("user_roles").select("user_id, role"),
+    ]);
+    setUsers(u.data || []);
+    const map: Record<string, string[]> = {};
+    (r.data || []).forEach((row: any) => {
+      if (!map[row.user_id]) map[row.user_id] = [];
+      map[row.user_id].push(row.role);
+    });
+    setRoles(map);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const toggleRole = async (userId: string, role: "admin" | "group_admin" | "moderator") => {
+    const has = roles[userId]?.includes(role);
+    if (has) {
+      const { error } = await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", role);
+      if (error) return toast.error(error.message);
+      toast.success(`Removed ${role}`);
+    } else {
+      const { error } = await supabase.from("user_roles").insert({ user_id: userId, role });
+      if (error) return toast.error(error.message);
+      toast.success(`Granted ${role}`);
+    }
+    load();
+  };
+
+  if (loading) return <div className="flex justify-center py-8"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground mb-3">Grant admin or group-admin powers to users. Group admins can create course chat groups.</p>
+      {users.map(u => (
+        <div key={u.user_id} className="content-card flex items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold truncate">{u.display_name || "No name"}</div>
+            <div className="text-[11px] text-muted-foreground truncate">{u.matric_number || "—"} · {u.department || "—"}</div>
+          </div>
+          <div className="flex gap-1.5">
+            {(["admin", "group_admin", "moderator"] as const).map(r => {
+              const active = roles[u.user_id]?.includes(r);
+              return (
+                <button key={r} onClick={() => toggleRole(u.user_id, r)}
+                  className={`text-[11px] px-2.5 py-1 rounded-full font-medium border cursor-pointer transition ${
+                    active ? "bg-primary text-primary-foreground border-primary" : "bg-transparent text-muted-foreground border-border hover:border-primary/50"
+                  }`}>
+                  {r.replace("_", " ")}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      {users.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">No users yet.</p>}
+    </div>
+  );
+};
+
+const NewsTab = () => {
+  const [news, setNews] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ title: "", body: "", category: "general", pinned: false });
+
+  const load = async () => {
+    const { data } = await supabase.from("campus_news").select("*").order("created_at", { ascending: false });
+    setNews(data || []);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const publish = async () => {
+    if (!form.title.trim() || !form.body.trim()) return toast.error("Title and body required");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { error } = await supabase.from("campus_news").insert({ ...form, published_by: user.id });
+    if (error) return toast.error(error.message);
+    toast.success("News published");
+    setForm({ title: "", body: "", category: "general", pinned: false });
+    load();
+  };
+
+  const togglePin = async (id: string, pinned: boolean) => {
+    await supabase.from("campus_news").update({ pinned: !pinned }).eq("id", id);
+    load();
+  };
+
+  const remove = async (id: string) => {
+    await supabase.from("campus_news").delete().eq("id", id);
+    load();
+  };
+
+  if (loading) return <div className="flex justify-center py-8"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
+
+  return (
+    <div className="space-y-3">
+      <div className="content-card space-y-2">
+        <h3 className="section-label">Publish News</h3>
+        <Input placeholder="Title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="h-9 text-sm" />
+        <textarea placeholder="Body" value={form.body} onChange={e => setForm({ ...form, body: e.target.value })} rows={3}
+          className="w-full px-3 py-2 rounded-md border border-input bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
+        <div className="grid grid-cols-2 gap-2">
+          <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
+            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+            <option value="general">General</option>
+            <option value="academic">Academic</option>
+            <option value="event">Event</option>
+            <option value="urgent">Urgent</option>
+          </select>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.pinned} onChange={e => setForm({ ...form, pinned: e.target.checked })} />
+            Pin to top
+          </label>
+        </div>
+        <Button size="sm" onClick={publish} className="w-full gap-1"><Plus className="w-3 h-3" /> Publish</Button>
+      </div>
+
+      <div className="space-y-2">
+        {news.map(n => (
+          <div key={n.id} className="content-card flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold flex items-center gap-2">
+                {n.pinned && <Pin className="w-3 h-3 text-primary" />}
+                {n.title}
+              </div>
+              <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{n.body}</p>
+              <div className="text-[10px] text-muted-foreground mt-1 uppercase">{n.category} · {new Date(n.created_at).toLocaleDateString()}</div>
+            </div>
+            <div className="flex gap-1 shrink-0">
+              <button onClick={() => togglePin(n.id, n.pinned)} className="text-muted-foreground hover:text-primary bg-transparent border-none cursor-pointer">
+                {n.pinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
+              </button>
+              <button onClick={() => remove(n.id)} className="text-muted-foreground hover:text-destructive bg-transparent border-none cursor-pointer">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+        {news.length === 0 && <p className="text-center text-sm text-muted-foreground py-6">No news yet.</p>}
       </div>
     </div>
   );

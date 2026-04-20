@@ -39,10 +39,9 @@ function Index() {
   const [feedKey, setFeedKey] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [userInitials, setUserInitials] = useState("U");
+  const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!mounted) return;
@@ -67,6 +66,40 @@ function Index() {
         setUserInitials(initials.toUpperCase());
       });
   }, [session]);
+
+  // Mobile swipe gesture: swipe left from the right edge to open chat drawer (only on feed)
+  useEffect(() => {
+    if (!session || activePanel !== "feed") return;
+    let startX = 0; let startY = 0; let tracking = false;
+
+    const onStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      // Only trigger if swipe starts within 30px of the right edge
+      if (t.clientX > window.innerWidth - 30) {
+        startX = t.clientX; startY = t.clientY; tracking = true;
+      }
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!tracking) return;
+      const t = e.touches[0];
+      const dx = startX - t.clientX;
+      const dy = Math.abs(startY - t.clientY);
+      if (dx > 60 && dy < 40) {
+        setChatDrawerOpen(true);
+        tracking = false;
+      }
+    };
+    const onEnd = () => { tracking = false; };
+
+    window.addEventListener("touchstart", onStart, { passive: true });
+    window.addEventListener("touchmove", onMove, { passive: true });
+    window.addEventListener("touchend", onEnd);
+    return () => {
+      window.removeEventListener("touchstart", onStart);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd);
+    };
+  }, [session, activePanel]);
 
   if (!mounted || loading) {
     return (
@@ -126,6 +159,29 @@ function Index() {
           )}
         </div>
       </div>
+
+      {/* Mobile swipe-in chat drawer (feed only) */}
+      {activePanel === "feed" && (
+        <>
+          {chatDrawerOpen && (
+            <div className="fixed inset-0 bg-foreground/40 z-[60] lg:hidden" onClick={() => setChatDrawerOpen(false)} />
+          )}
+          <aside className={`lg:hidden fixed top-0 right-0 bottom-0 w-[92%] max-w-[420px] bg-background z-[70] shadow-2xl transition-transform duration-300 overflow-y-auto ${chatDrawerOpen ? "translate-x-0" : "translate-x-full"}`}>
+            <div className="sticky top-0 bg-card border-b border-border px-3 py-2.5 flex items-center justify-between z-10">
+              <span className="text-sm font-semibold">Course Chats</span>
+              <button onClick={() => setChatDrawerOpen(false)} className="text-xs text-muted-foreground bg-transparent border-none cursor-pointer px-2">Close</button>
+            </div>
+            <div className="p-3"><CourseChatsPanel /></div>
+          </aside>
+          {/* Tiny visual hint at right edge */}
+          {!chatDrawerOpen && (
+            <button onClick={() => setChatDrawerOpen(true)}
+              className="lg:hidden fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-primary text-primary-foreground text-[10px] font-semibold px-1.5 py-3 rounded-l-md shadow-lg border-none cursor-pointer writing-mode-vertical">
+              💬
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 }
