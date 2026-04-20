@@ -30,16 +30,18 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "AcadLink SSU — Sokoto State University Student Platform" },
+      { title: "AcadLink" },
       { name: "description", content: "Past Questions, Courses, Departments, Course Chats and Student Feed for SSU students." },
-      { property: "og:title", content: "AcadLink SSU" },
-      { property: "og:description", content: "Sokoto State University student platform." },
+      { property: "og:title", content: "AcadLink" },
+      { property: "og:description", content: "Past Questions, Courses, Departments, Course Chats and Student Feed for SSU students." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "AcadLink" },
+      { name: "twitter:description", content: "Past Questions, Courses, Departments, Course Chats and Student Feed for SSU students." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/ZggeJT1nPfZMeUB9r2ek5P2pMM92/social-images/social-1776686663391-1000562611.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/ZggeJT1nPfZMeUB9r2ek5P2pMM92/social-images/social-1776686663391-1000562611.webp" },
     ],
     links: [
-      { rel: "icon", type: "image/png", href: "/acadlink-logo.png" },
-      { rel: "apple-touch-icon", href: "/acadlink-logo.png" },
       {
         rel: "stylesheet",
         href: appCss,
