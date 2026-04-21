@@ -5,6 +5,8 @@ import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "@/components/AuthScreen";
 import TopNav from "@/components/TopNav";
 import PostComposer from "@/components/PostComposer";
+import PostComposerTrigger from "@/components/PostComposerTrigger";
+import PostScreen from "@/components/PostScreen";
 import FeedList from "@/components/FeedList";
 import ProfilePanel from "@/components/ProfilePanel";
 import LeftSidebar from "@/components/LeftSidebar";
@@ -40,6 +42,7 @@ function Index() {
   const [mounted, setMounted] = useState(false);
   const [userInitials, setUserInitials] = useState("U");
   const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
+  const [postScreenOpen, setPostScreenOpen] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -123,7 +126,7 @@ function Index() {
       case "feed":
         return (
           <>
-            <PostComposer userInitials={userInitials} onPostCreated={() => setFeedKey(k => k + 1)} />
+            <PostComposerTrigger userInitials={userInitials} onClick={() => setPostScreenOpen(true)} />
             <div className="mt-4">
               <FeedList refreshKey={feedKey} />
             </div>
@@ -182,6 +185,14 @@ function Index() {
           )}
         </>
       )}
+
+      {/* Full-screen post overlay */}
+      <PostScreen
+        open={postScreenOpen}
+        userInitials={userInitials}
+        onClose={() => setPostScreenOpen(false)}
+        onPostCreated={() => setFeedKey(k => k + 1)}
+      />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Paperclip, X, Image, Film, FileText } from "lucide-react";
 interface PostComposerProps {
   userInitials: string;
   onPostCreated?: () => void;
+  fullscreen?: boolean;
 }
 
 const tags = [
@@ -15,18 +16,25 @@ const tags = [
   { value: "resource", label: "Resource" },
 ];
 
-const PostComposer = ({ userInitials, onPostCreated }: PostComposerProps) => {
+const PostComposer = ({ userInitials, onPostCreated, fullscreen = false }: PostComposerProps) => {
   const [content, setContent] = useState("");
   const [tag, setTag] = useState("discussion");
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(fullscreen);
   const fileRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Close toolbar when clicking outside
+  // Autofocus in fullscreen mode
   useEffect(() => {
+    if (fullscreen) textareaRef.current?.focus();
+  }, [fullscreen]);
+
+  // Close toolbar when clicking outside (skip in fullscreen mode)
+  useEffect(() => {
+    if (fullscreen) return;
     const handler = (e: MouseEvent) => {
       if (composerRef.current && !composerRef.current.contains(e.target as Node)) {
         if (!content.trim() && !file) setExpanded(false);
@@ -34,7 +42,7 @@ const PostComposer = ({ userInitials, onPostCreated }: PostComposerProps) => {
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [content, file]);
+  }, [content, file, fullscreen]);
 
   // Generate preview for images/videos
   useEffect(() => {
@@ -104,12 +112,13 @@ const PostComposer = ({ userInitials, onPostCreated }: PostComposerProps) => {
         </div>
         <div className="flex-1">
           <textarea
+            ref={textareaRef}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onFocus={() => setExpanded(true)}
             placeholder="What's on your mind?"
             className="w-full bg-transparent border-none outline-none text-sm resize-none placeholder:text-muted-foreground"
-            rows={expanded ? 3 : 1}
+            rows={fullscreen ? 8 : (expanded ? 3 : 1)}
           />
 
           {/* File preview */}
