@@ -6,6 +6,7 @@ import { Paperclip, X, Image, Film, FileText } from "lucide-react";
 interface PostComposerProps {
   userInitials: string;
   onPostCreated?: () => void;
+  fullscreen?: boolean;
 }
 
 const tags = [
@@ -15,15 +16,21 @@ const tags = [
   { value: "resource", label: "Resource" },
 ];
 
-const PostComposer = ({ userInitials, onPostCreated }: PostComposerProps) => {
+const PostComposer = ({ userInitials, onPostCreated, fullscreen = false }: PostComposerProps) => {
   const [content, setContent] = useState("");
   const [tag, setTag] = useState("discussion");
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(fullscreen);
   const fileRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Autofocus in fullscreen mode
+  useEffect(() => {
+    if (fullscreen) textareaRef.current?.focus();
+  }, [fullscreen]);
 
   // Close toolbar when clicking outside
   useEffect(() => {
