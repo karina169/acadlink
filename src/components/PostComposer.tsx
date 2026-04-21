@@ -32,8 +32,9 @@ const PostComposer = ({ userInitials, onPostCreated, fullscreen = false }: PostC
     if (fullscreen) textareaRef.current?.focus();
   }, [fullscreen]);
 
-  // Close toolbar when clicking outside
+  // Close toolbar when clicking outside (skip in fullscreen mode)
   useEffect(() => {
+    if (fullscreen) return;
     const handler = (e: MouseEvent) => {
       if (composerRef.current && !composerRef.current.contains(e.target as Node)) {
         if (!content.trim() && !file) setExpanded(false);
@@ -41,7 +42,7 @@ const PostComposer = ({ userInitials, onPostCreated, fullscreen = false }: PostC
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [content, file]);
+  }, [content, file, fullscreen]);
 
   // Generate preview for images/videos
   useEffect(() => {
