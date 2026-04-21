@@ -158,22 +158,30 @@ const PostComposer = ({ userInitials, onPostCreated, fullscreen = false }: PostC
 
           {/* Expandable toolbar — only shows when focused/expanded */}
           {expanded && (
-            <div className="mt-3 pt-3 border-t border-border flex items-center justify-between gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
-              <div className="flex gap-1">
-                {tags.map(t => (
-                  <button key={t.value} onClick={() => setTag(t.value)}
-                    className={`filter-pill text-xs ${tag === t.value ? "filter-pill-active" : ""}`}>
-                    {t.label}
-                  </button>
-                ))}
+            <div className="mt-3 pt-3 border-t border-border animate-in fade-in slide-in-from-top-1 duration-200">
+              {/* Tag pills — horizontally scrollable on small screens so all are reachable */}
+              <div className="-mx-1 overflow-x-auto scrollbar-none">
+                <div className="flex gap-1.5 px-1 pb-2 w-max">
+                  {tags.map(t => (
+                    <button
+                      key={t.value}
+                      onClick={() => setTag(t.value)}
+                      className={`filter-pill text-xs whitespace-nowrap shrink-0 ${tag === t.value ? "filter-pill-active" : ""}`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+
+              {/* Action row */}
+              <div className="flex items-center justify-between gap-2 mt-1">
                 <input ref={fileRef} type="file" hidden accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-                <button onClick={() => fileRef.current?.click()} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors bg-transparent border-none cursor-pointer" title="Attach file">
+                <button onClick={() => fileRef.current?.click()} className="p-2 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors bg-transparent border-none cursor-pointer" title="Attach file">
                   <Paperclip className="w-4 h-4" />
                 </button>
                 <button onClick={handlePost} disabled={posting || !content.trim()}
-                  className="px-4 py-1.5 bg-primary text-primary-foreground rounded-md text-xs font-medium border-none cursor-pointer transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">
+                  className="px-5 py-2 bg-primary text-primary-foreground rounded-md text-xs font-semibold border-none cursor-pointer transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">
                   {posting ? "Posting..." : "Post"}
                 </button>
               </div>
