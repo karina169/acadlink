@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Calendar, MapPin, Clock, Users, Bookmark, BookmarkCheck } from "lucide-react";
+import { Calendar, MapPin, Clock, Users, Bookmark, BookmarkCheck, CalendarDays } from "lucide-react";
 
 interface Event {
   id: string;
@@ -21,16 +21,9 @@ const typeColors: Record<string, string> = {
   deadline: "bg-orange-50 text-orange-700",
 };
 
-const initialEvents: Event[] = [
-  { id: "1", title: "CSC 301 Mid-Semester Test", date: "Apr 14, 2026", time: "10:00 AM", location: "CBT Centre Hall A", type: "exam", description: "Covers Chapters 1–5: Trees, Sorting, Graphs", attendees: 120, saved: true },
-  { id: "2", title: "AI & Machine Learning Workshop", date: "Apr 16, 2026", time: "2:00 PM", location: "ICT Lab 2", type: "workshop", description: "Hands-on intro to ML with Python and scikit-learn", attendees: 45, saved: false },
-  { id: "3", title: "Research Methodology Seminar", date: "Apr 18, 2026", time: "11:00 AM", location: "Senate Building Auditorium", type: "seminar", description: "Writing effective research proposals for final year projects", attendees: 80, saved: false },
-  { id: "4", title: "Course Registration Deadline", date: "Apr 20, 2026", time: "11:59 PM", location: "Online Portal", type: "deadline", description: "Last day to add/drop courses for 2025/2026 session", attendees: 0, saved: true },
-  { id: "5", title: "Inter-Faculty Sports Day", date: "Apr 22, 2026", time: "8:00 AM", location: "University Sports Complex", type: "social", description: "Football, volleyball, athletics — represent your faculty!", attendees: 200, saved: false },
-];
-
 const EventsPanel = () => {
-  const [events, setEvents] = useState(initialEvents);
+  // Real events will be added by admins. Until then, show an empty state.
+  const [events, setEvents] = useState<Event[]>([]);
   const [filter, setFilter] = useState("all");
 
   const toggleSave = (id: string) => setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, saved: !e.saved } : e)));
@@ -51,29 +44,41 @@ const EventsPanel = () => {
         ))}
       </div>
 
-      <div className="space-y-3">
-        {filtered.map((event) => (
-          <div key={event.id} className="content-card">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase inline-block mb-1.5 ${typeColors[event.type]}`}>{event.type}</span>
-                <h3 className="font-semibold text-sm">{event.title}</h3>
-                <p className="text-xs text-muted-foreground mt-1">{event.description}</p>
-              </div>
-              <button onClick={() => toggleSave(event.id)} className="text-muted-foreground hover:text-primary transition-colors shrink-0 bg-transparent border-none cursor-pointer">
-                {event.saved ? <BookmarkCheck className="w-4 h-4 text-primary" /> : <Bookmark className="w-4 h-4" />}
-              </button>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-border text-[11px] text-muted-foreground">
-              <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{event.date}</span>
-              <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{event.time}</span>
-              <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{event.location}</span>
-              {event.attendees > 0 && <span className="flex items-center gap-1"><Users className="w-3 h-3" />{event.attendees}</span>}
-            </div>
+      {events.length === 0 ? (
+        <div className="content-card flex flex-col items-center justify-center text-center py-10">
+          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
+            <CalendarDays className="w-6 h-6 text-muted-foreground" />
           </div>
-        ))}
-        {filtered.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">No events found.</p>}
-      </div>
+          <h3 className="text-sm font-semibold mb-1">No events yet</h3>
+          <p className="text-xs text-muted-foreground max-w-[280px]">
+            Campus events and deadlines will appear here once your admin posts them.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((event) => (
+            <div key={event.id} className="content-card">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase inline-block mb-1.5 ${typeColors[event.type]}`}>{event.type}</span>
+                  <h3 className="font-semibold text-sm">{event.title}</h3>
+                  <p className="text-xs text-muted-foreground mt-1">{event.description}</p>
+                </div>
+                <button onClick={() => toggleSave(event.id)} className="text-muted-foreground hover:text-primary transition-colors shrink-0 bg-transparent border-none cursor-pointer">
+                  {event.saved ? <BookmarkCheck className="w-4 h-4 text-primary" /> : <Bookmark className="w-4 h-4" />}
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-border text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{event.date}</span>
+                <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{event.time}</span>
+                <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{event.location}</span>
+                {event.attendees > 0 && <span className="flex items-center gap-1"><Users className="w-3 h-3" />{event.attendees}</span>}
+              </div>
+            </div>
+          ))}
+          {filtered.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">No events match this filter.</p>}
+        </div>
+      )}
     </div>
   );
 };
