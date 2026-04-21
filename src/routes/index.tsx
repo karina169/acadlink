@@ -185,6 +185,14 @@ function Index() {
           )}
         </>
       )}
+
+      {/* Full-screen post overlay */}
+      <PostScreen
+        open={postScreenOpen}
+        userInitials={userInitials}
+        onClose={() => setPostScreenOpen(false)}
+        onPostCreated={() => setFeedKey(k => k + 1)}
+      />
     </div>
   );
 }
