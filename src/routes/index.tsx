@@ -5,6 +5,8 @@ import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "@/components/AuthScreen";
 import TopNav from "@/components/TopNav";
 import PostComposer from "@/components/PostComposer";
+import PostComposerTrigger from "@/components/PostComposerTrigger";
+import PostScreen from "@/components/PostScreen";
 import FeedList from "@/components/FeedList";
 import ProfilePanel from "@/components/ProfilePanel";
 import LeftSidebar from "@/components/LeftSidebar";

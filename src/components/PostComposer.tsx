@@ -112,12 +112,13 @@ const PostComposer = ({ userInitials, onPostCreated, fullscreen = false }: PostC
         </div>
         <div className="flex-1">
           <textarea
+            ref={textareaRef}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onFocus={() => setExpanded(true)}
             placeholder="What's on your mind?"
             className="w-full bg-transparent border-none outline-none text-sm resize-none placeholder:text-muted-foreground"
-            rows={expanded ? 3 : 1}
+            rows={fullscreen ? 8 : (expanded ? 3 : 1)}
           />
 
           {/* File preview */}
