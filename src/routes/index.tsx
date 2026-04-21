@@ -42,6 +42,7 @@ function Index() {
   const [mounted, setMounted] = useState(false);
   const [userInitials, setUserInitials] = useState("U");
   const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
+  const [postScreenOpen, setPostScreenOpen] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -125,7 +126,7 @@ function Index() {
       case "feed":
         return (
           <>
-            <PostComposer userInitials={userInitials} onPostCreated={() => setFeedKey(k => k + 1)} />
+            <PostComposerTrigger userInitials={userInitials} onClick={() => setPostScreenOpen(true)} />
             <div className="mt-4">
               <FeedList refreshKey={feedKey} />
             </div>
