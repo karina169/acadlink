@@ -36,14 +36,19 @@ const PastQuestionsPanel = () => {
 
       let query = supabase
         .from("past_questions")
-        .select("id, title, session, semester, pages, downloads, file_url, file_name, courses(code)")
+        .select("id, title, session, semester, pages, downloads, file_url, file_name, target_departments, department_id, level, courses(code)")
         .order("created_at", { ascending: false });
 
-      if (deptId) query = query.or(`department_id.eq.${deptId},department_id.is.null`);
       if (profile?.level) query = query.or(`level.eq.${profile.level},level.is.null`);
 
       const { data } = await query;
-      setItems(((data as any[]) || []).map((r) => ({ ...r, course_code: r.courses?.code })));
+      const filtered = ((data as any[]) || []).filter((r) => {
+        if (!deptId) return true;
+        const targets: string[] = r.target_departments || [];
+        if (targets.length > 0) return targets.includes(deptId);
+        return !r.department_id || r.department_id === deptId;
+      });
+      setItems(filtered.map((r) => ({ ...r, course_code: r.courses?.code })));
       setLoading(false);
     };
     load();

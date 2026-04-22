@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { MessageCircle, ChevronDown, ChevronUp, Send, Trash2, Bookmark, BookmarkCheck, FileText, Download } from "lucide-react";
+import VerifiedBadge from "./VerifiedBadge";
 
 interface PostData {
   id: string;
@@ -9,7 +10,7 @@ interface PostData {
   content: string;
   tag: string;
   created_at: string;
-  profile?: { display_name: string | null; department: string | null; level: string | null; avatar_url: string | null } | null;
+  profile?: { display_name: string | null; department: string | null; level: string | null; avatar_url: string | null; verified: boolean | null } | null;
   attachments: { id: string; file_url: string; file_name: string; file_size: string | null; file_type: string | null }[];
   like_count: number;
   comment_count: number;
@@ -41,7 +42,7 @@ interface CommentData {
   user_id: string;
   content: string;
   created_at: string;
-  profile?: { display_name: string | null } | null;
+  profile?: { display_name: string | null; verified: boolean | null } | null;
 }
 
 const CommentsSection = ({ postId, userId }: { postId: string; userId: string }) => {
@@ -54,7 +55,7 @@ const CommentsSection = ({ postId, userId }: { postId: string; userId: string })
     const { data } = await supabase.from("comments").select("id, user_id, content, created_at").eq("post_id", postId).order("created_at", { ascending: true });
     if (data) {
       const userIds = [...new Set(data.map(c => c.user_id))];
-      const { data: profiles } = await supabase.from("profiles").select("user_id, display_name").in("user_id", userIds);
+      const { data: profiles } = await supabase.from("profiles").select("user_id, display_name, verified").in("user_id", userIds);
       const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
       setComments(data.map(c => ({ ...c, profile: profileMap.get(c.user_id) })));
     }
@@ -90,7 +91,7 @@ const CommentsSection = ({ postId, userId }: { postId: string; userId: string })
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold">{c.profile?.display_name || "User"}</span>
+                  <span className="text-xs font-semibold flex items-center gap-0.5">{c.profile?.display_name || "User"}<VerifiedBadge verified={c.profile?.verified} className="w-3 h-3" /></span>
                   <span className="text-[10px] text-muted-foreground">{timeAgo(c.created_at)}</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">{c.content}</p>
@@ -144,7 +145,10 @@ const FeedPost = ({ post, userId }: { post: PostData; userId: string }) => {
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-sm">{post.profile?.display_name || "User"}</div>
+          <div className="font-semibold text-sm flex items-center gap-1">
+            <span className="truncate">{post.profile?.display_name || "User"}</span>
+            <VerifiedBadge verified={post.profile?.verified} />
+          </div>
           <div className="text-[11px] text-muted-foreground">
             {post.profile?.department || ""}{post.profile?.level ? ` · ${post.profile.level} Level` : ""} · {timeAgo(post.created_at)}
           </div>
@@ -215,10 +219,8 @@ const FeedPost = ({ post, userId }: { post: PostData; userId: string }) => {
 
 const filterTabs = [
   { key: "all", label: "All" },
-  { key: "announcement", label: "Notices" },
-  { key: "question", label: "Questions" },
-  { key: "resource", label: "Resources" },
-  { key: "discussion", label: "Discussion" },
+  { key: "live", label: "Live Event" },
+  { key: "creels", label: "C.Reels" },
 ];
 
 const FeedList = ({ refreshKey }: { refreshKey?: number }) => {
@@ -232,8 +234,9 @@ const FeedList = ({ refreshKey }: { refreshKey?: number }) => {
     if (!user) return;
     setUserId(user.id);
 
-    let query = supabase.from("posts").select("id, user_id, content, tag, created_at").order("created_at", { ascending: false }).limit(50);
-    if (filter !== "all") query = query.eq("tag", filter);
+    let query = supabase.from("posts").select("id, user_id, content, tag, created_at").neq("tag", "status").order("created_at", { ascending: false }).limit(50);
+    if (filter === "live") query = query.eq("tag", "live");
+    else if (filter === "creels") query = query.eq("tag", "creels");
 
     const { data: postsData } = await query;
     if (!postsData) { setLoading(false); return; }
@@ -242,7 +245,7 @@ const FeedList = ({ refreshKey }: { refreshKey?: number }) => {
     const userIds = [...new Set(postsData.map(p => p.user_id))];
 
     const [profilesRes, attachmentsRes, likesRes, commentsRes, userLikesRes] = await Promise.all([
-      supabase.from("profiles").select("user_id, display_name, department, level, avatar_url").in("user_id", userIds),
+      supabase.from("profiles").select("user_id, display_name, department, level, avatar_url, verified").in("user_id", userIds),
       supabase.from("post_attachments").select("id, post_id, file_url, file_name, file_size, file_type").in("post_id", postIds),
       supabase.from("post_likes").select("post_id").in("post_id", postIds),
       supabase.from("comments").select("post_id").in("post_id", postIds),

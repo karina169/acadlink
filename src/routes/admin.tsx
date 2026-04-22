@@ -267,7 +267,7 @@ function UsersPanel() {
                   <th className="text-left px-4 py-3">Department</th>
                   <th className="text-left px-4 py-3">Level</th>
                   <th className="text-left px-4 py-3">Matric No.</th>
-                  <th className="text-left px-4 py-3">Joined</th>
+                  <th className="text-left px-4 py-3">Verified</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -283,15 +283,32 @@ function UsersPanel() {
                           </div>
                         )}
                         <div>
-                          <div className="font-medium">{u.display_name || "No name"}</div>
-                          <div className="text-[11px] text-muted-foreground">{u.bio?.slice(0, 40) || ""}</div>
+                          <div className="font-medium flex items-center gap-1">
+                            {u.display_name || "No name"}
+                            {u.verified && <Check className="w-3.5 h-3.5 text-[#1d9bf0] fill-[#1d9bf0]" />}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</div>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{u.department || "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">{u.level || "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{u.matric_number || "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground text-xs">{new Date(u.created_at).toLocaleDateString()}</td>
+                    <td className="px-4 py-3">
+                      <Button
+                        size="sm"
+                        variant={u.verified ? "default" : "outline"}
+                        className="h-7 text-[11px] gap-1"
+                        onClick={async () => {
+                          const { error } = await supabase.from("profiles").update({ verified: !u.verified }).eq("user_id", u.user_id);
+                          if (error) return toast.error(error.message);
+                          toast.success(u.verified ? "Unverified" : "Verified");
+                          loadUsers();
+                        }}
+                      >
+                        {u.verified ? <><X className="w-3 h-3" />Unverify</> : <><Check className="w-3 h-3" />Verify</>}
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
