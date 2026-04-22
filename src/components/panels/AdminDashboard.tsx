@@ -523,19 +523,25 @@ const LEVELS = ["100", "200", "300", "400", "500"];
 
 const HandoutsAdmin = () => {
   const { departments, courses } = useScopeOptions();
-  const [form, setForm] = useState({ title: "", description: "", department_id: "", level: "", course_id: "" });
+  const [form, setForm] = useState({ title: "", description: "", level: "", course_id: "" });
+  const [targetDepts, setTargetDepts] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [items, setItems] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
-    const { data } = await supabase.from("handouts").select("id, title, level, created_at, departments(name), courses(code)").order("created_at", { ascending: false }).limit(50);
+    const { data } = await supabase.from("handouts").select("id, title, level, target_departments, created_at, courses(code)").order("created_at", { ascending: false }).limit(50);
     setItems(data || []);
   };
   useEffect(() => { load(); }, []);
 
+  const toggleDept = (id: string) => {
+    setTargetDepts((prev) => prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id]);
+  };
+
   const submit = async () => {
     if (!form.title.trim() || !file) return toast.error("Title and file required");
+    if (targetDepts.length === 0) return toast.error("Select at least one department to send to");
     setBusy(true);
     const up = await uploadFile(file, "handouts");
     if (!up) { setBusy(false); return; }
@@ -543,7 +549,8 @@ const HandoutsAdmin = () => {
     const { error } = await supabase.from("handouts").insert({
       title: form.title.trim(),
       description: form.description.trim() || null,
-      department_id: form.department_id || null,
+      department_id: targetDepts[0], // primary dept (first) for back-compat
+      target_departments: targetDepts,
       level: form.level || null,
       course_id: form.course_id || null,
       file_url: up.url, file_name: file.name, file_size: up.size, file_type: file.type,
@@ -551,8 +558,9 @@ const HandoutsAdmin = () => {
     });
     setBusy(false);
     if (error) return toast.error(error.message);
-    toast.success("Handout uploaded");
-    setForm({ title: "", description: "", department_id: "", level: "", course_id: "" });
+    toast.success(`Handout sent to ${targetDepts.length} department(s)`);
+    setForm({ title: "", description: "", level: "", course_id: "" });
+    setTargetDepts([]);
     setFile(null);
     load();
   };
@@ -562,7 +570,7 @@ const HandoutsAdmin = () => {
     load();
   };
 
-  const filteredCourses = form.department_id ? courses.filter((c) => c.department_id === form.department_id) : courses;
+  const filteredCourses = targetDepts.length === 1 ? courses.filter((c) => c.department_id === targetDepts[0]) : courses;
 
   return (
     <div className="space-y-3">
@@ -571,23 +579,38 @@ const HandoutsAdmin = () => {
         <Input placeholder="Title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="h-9 text-sm" />
         <textarea placeholder="Description (optional)" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2}
           className="w-full px-3 py-2 rounded-md border border-input bg-transparent text-sm" />
+
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-medium">Send to departments ({targetDepts.length} selected)</label>
+            <button type="button" onClick={() => setTargetDepts(targetDepts.length === departments.length ? [] : departments.map((d) => d.id))}
+              className="text-[11px] text-primary bg-transparent border-none cursor-pointer hover:underline">
+              {targetDepts.length === departments.length ? "Clear all" : "Select all"}
+            </button>
+          </div>
+          <div className="max-h-[160px] overflow-y-auto border border-input rounded-md p-2 space-y-1">
+            {departments.map((d) => (
+              <label key={d.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted px-1.5 py-1 rounded">
+                <input type="checkbox" checked={targetDepts.includes(d.id)} onChange={() => toggleDept(d.id)} />
+                <span>{d.name}</span>
+              </label>
+            ))}
+            {departments.length === 0 && <p className="text-[11px] text-muted-foreground p-1">No departments yet — add one in the Academics tab.</p>}
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-2">
-          <select value={form.department_id} onChange={e => setForm({ ...form, department_id: e.target.value, course_id: "" })}
-            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-            <option value="">All departments</option>
-            {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
           <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })}
             className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
             <option value="">All levels</option>
             {LEVELS.map(l => <option key={l} value={l}>{l}L</option>)}
           </select>
+          <select value={form.course_id} onChange={e => setForm({ ...form, course_id: e.target.value })}
+            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+            <option value="">No specific course</option>
+            {filteredCourses.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.title}</option>)}
+          </select>
         </div>
-        <select value={form.course_id} onChange={e => setForm({ ...form, course_id: e.target.value })}
-          className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
-          <option value="">No specific course</option>
-          {filteredCourses.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.title}</option>)}
-        </select>
         <input type="file" onChange={e => setFile(e.target.files?.[0] || null)} className="text-xs" />
         <Button size="sm" onClick={submit} disabled={busy} className="w-full gap-1"><Plus className="w-3 h-3" /> {busy ? "Uploading..." : "Upload"}</Button>
       </div>
@@ -598,7 +621,7 @@ const HandoutsAdmin = () => {
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold truncate">{h.title}</div>
               <div className="text-[11px] text-muted-foreground mt-0.5">
-                {[h.courses?.code, h.departments?.name, h.level && `${h.level}L`].filter(Boolean).join(" · ") || "All scopes"}
+                {[h.courses?.code, h.level && `${h.level}L`, `${(h.target_departments?.length || 0)} dept(s)`].filter(Boolean).join(" · ")}
               </div>
             </div>
             <button onClick={() => remove(h.id)} className="text-muted-foreground hover:text-destructive bg-transparent border-none cursor-pointer">
