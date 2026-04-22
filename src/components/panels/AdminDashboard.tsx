@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
-type Tab = "overview" | "users" | "content" | "faculties" | "roles" | "news";
+type Tab = "overview" | "users" | "content" | "faculties" | "roles" | "news" | "uploads";
 
 const AdminDashboard = () => {
   const [tab, setTab] = useState<Tab>("overview");
@@ -24,6 +24,7 @@ const AdminDashboard = () => {
           { key: "roles", label: "Roles", icon: UserCog },
           { key: "content", label: "Content", icon: FileText },
           { key: "news", label: "News", icon: Newspaper },
+          { key: "uploads", label: "Uploads", icon: BookOpen },
           { key: "faculties", label: "Academics", icon: GraduationCap },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setTab(key)}
@@ -40,6 +41,7 @@ const AdminDashboard = () => {
       {tab === "roles" && <RolesTab />}
       {tab === "content" && <ContentTab />}
       {tab === "news" && <NewsTab />}
+      {tab === "uploads" && <UploadsTab />}
       {tab === "faculties" && <FacultiesTab />}
     </div>
   );
