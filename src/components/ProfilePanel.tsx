@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import VerifiedBadge from "./VerifiedBadge";
 
 const ProfilePanel = () => {
   const [profile, setProfile] = useState<{
@@ -9,6 +10,7 @@ const ProfilePanel = () => {
     matric_number: string | null;
     bio: string | null;
     avatar_url: string | null;
+    verified: boolean | null;
   } | null>(null);
   const [postCount, setPostCount] = useState(0);
 
@@ -16,7 +18,7 @@ const ProfilePanel = () => {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase.from("profiles").select("display_name, department, level, matric_number, bio, avatar_url").eq("user_id", user.id).single();
+      const { data } = await supabase.from("profiles").select("display_name, department, level, matric_number, bio, avatar_url, verified").eq("user_id", user.id).single();
       setProfile(data);
       const { count } = await supabase.from("posts").select("id", { count: "exact", head: true }).eq("user_id", user.id);
       setPostCount(count || 0);
@@ -31,10 +33,10 @@ const ProfilePanel = () => {
       <div className="content-card !p-0 overflow-hidden">
         <div className="h-16 bg-gradient-to-r from-primary/10 to-primary/5" />
         <div className="px-4 pb-4">
-          <div className="w-14 h-14 rounded-full border-4 border-card -mt-7 mb-2 bg-primary/10 text-primary flex items-center justify-center text-lg font-semibold">
-            {initials}
+          <div className="w-14 h-14 rounded-full border-4 border-card -mt-7 mb-2 bg-primary/10 text-primary flex items-center justify-center text-lg font-semibold overflow-hidden">
+            {profile?.avatar_url ? <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" /> : initials}
           </div>
-          <h2 className="text-base font-semibold">{profile?.display_name || "Student"}</h2>
+          <h2 className="text-base font-semibold flex items-center gap-1">{profile?.display_name || "Student"}<VerifiedBadge verified={profile?.verified} className="w-4 h-4" /></h2>
           {profile?.matric_number && <p className="text-xs text-muted-foreground">{profile.matric_number}</p>}
           <div className="flex gap-1.5 flex-wrap mt-2">
             {profile?.department && (
