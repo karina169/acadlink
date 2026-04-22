@@ -281,6 +281,7 @@ export type Database = {
           file_url: string
           id: string
           level: string | null
+          target_departments: string[]
           title: string
           updated_at: string
           uploaded_by: string
@@ -296,6 +297,7 @@ export type Database = {
           file_url: string
           id?: string
           level?: string | null
+          target_departments?: string[]
           title: string
           updated_at?: string
           uploaded_by: string
@@ -311,6 +313,7 @@ export type Database = {
           file_url?: string
           id?: string
           level?: string | null
+          target_departments?: string[]
           title?: string
           updated_at?: string
           uploaded_by?: string
@@ -378,6 +381,7 @@ export type Database = {
           pages: number | null
           semester: string | null
           session: string | null
+          target_departments: string[]
           title: string
           updated_at: string
           uploaded_by: string
@@ -394,6 +398,7 @@ export type Database = {
           pages?: number | null
           semester?: string | null
           session?: string | null
+          target_departments?: string[]
           title: string
           updated_at?: string
           uploaded_by: string
@@ -410,6 +415,7 @@ export type Database = {
           pages?: number | null
           semester?: string | null
           session?: string | null
+          target_departments?: string[]
           title?: string
           updated_at?: string
           uploaded_by?: string
@@ -538,6 +544,7 @@ export type Database = {
           matric_number: string | null
           updated_at: string
           user_id: string
+          verified: boolean
         }
         Insert: {
           avatar_url?: string | null
@@ -551,6 +558,7 @@ export type Database = {
           matric_number?: string | null
           updated_at?: string
           user_id: string
+          verified?: boolean
         }
         Update: {
           avatar_url?: string | null
@@ -564,6 +572,7 @@ export type Database = {
           matric_number?: string | null
           updated_at?: string
           user_id?: string
+          verified?: boolean
         }
         Relationships: []
       }
