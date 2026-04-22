@@ -42,7 +42,7 @@ interface CommentData {
   user_id: string;
   content: string;
   created_at: string;
-  profile?: { display_name: string | null } | null;
+  profile?: { display_name: string | null; verified: boolean | null } | null;
 }
 
 const CommentsSection = ({ postId, userId }: { postId: string; userId: string }) => {
@@ -55,7 +55,7 @@ const CommentsSection = ({ postId, userId }: { postId: string; userId: string })
     const { data } = await supabase.from("comments").select("id, user_id, content, created_at").eq("post_id", postId).order("created_at", { ascending: true });
     if (data) {
       const userIds = [...new Set(data.map(c => c.user_id))];
-      const { data: profiles } = await supabase.from("profiles").select("user_id, display_name").in("user_id", userIds);
+      const { data: profiles } = await supabase.from("profiles").select("user_id, display_name, verified").in("user_id", userIds);
       const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
       setComments(data.map(c => ({ ...c, profile: profileMap.get(c.user_id) })));
     }
@@ -91,7 +91,7 @@ const CommentsSection = ({ postId, userId }: { postId: string; userId: string })
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold">{c.profile?.display_name || "User"}</span>
+                  <span className="text-xs font-semibold flex items-center gap-0.5">{c.profile?.display_name || "User"}<VerifiedBadge verified={c.profile?.verified} className="w-3 h-3" /></span>
                   <span className="text-[10px] text-muted-foreground">{timeAgo(c.created_at)}</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">{c.content}</p>
