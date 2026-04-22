@@ -36,14 +36,20 @@ const HandoutsPanel = () => {
 
       let query = supabase
         .from("handouts")
-        .select("id, title, description, file_url, file_name, file_size, created_at, courses(code)")
+        .select("id, title, description, file_url, file_name, file_size, created_at, target_departments, department_id, level, courses(code)")
         .order("created_at", { ascending: false });
 
-      if (deptId) query = query.or(`department_id.eq.${deptId},department_id.is.null`);
       if (profile?.level) query = query.or(`level.eq.${profile.level},level.is.null`);
 
       const { data } = await query;
-      setItems(((data as any[]) || []).map((r) => ({ ...r, course_code: r.courses?.code })));
+      const filtered = ((data as any[]) || []).filter((r) => {
+        if (!deptId) return true;
+        const targets: string[] = r.target_departments || [];
+        if (targets.length > 0) return targets.includes(deptId);
+        // legacy: fall back to single department_id (or all if null)
+        return !r.department_id || r.department_id === deptId;
+      });
+      setItems(filtered.map((r) => ({ ...r, course_code: r.courses?.code })));
       setLoading(false);
     };
     load();
