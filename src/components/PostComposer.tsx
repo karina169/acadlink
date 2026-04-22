@@ -14,6 +14,8 @@ const tags = [
   { value: "question", label: "Question" },
   { value: "announcement", label: "Notice" },
   { value: "resource", label: "Resource" },
+  { value: "live", label: "Live Event" },
+  { value: "creels", label: "C.Reels" },
 ];
 
 const PostComposer = ({ userInitials, onPostCreated, fullscreen = false }: PostComposerProps) => {

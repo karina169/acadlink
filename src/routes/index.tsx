@@ -8,6 +8,7 @@ import PostComposer from "@/components/PostComposer";
 import PostComposerTrigger from "@/components/PostComposerTrigger";
 import PostScreen from "@/components/PostScreen";
 import FeedList from "@/components/FeedList";
+import StoryBar from "@/components/StoryBar";
 import ProfilePanel from "@/components/ProfilePanel";
 import LeftSidebar from "@/components/LeftSidebar";
 import PastQuestionsPanel from "@/components/panels/PastQuestionsPanel";
@@ -138,6 +139,7 @@ function Index() {
       case "feed":
         return (
           <>
+            <StoryBar refreshKey={feedKey} />
             <PostComposerTrigger userInitials={userInitials} onClick={() => setPostScreenOpen(true)} />
             <div className="mt-4">
               <FeedList refreshKey={feedKey} />
