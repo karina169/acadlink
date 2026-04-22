@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { LayoutDashboard, FileText, BookOpen, Calendar, GraduationCap, Building2, Users, Bell, Settings, HelpCircle, Newspaper, Shield, MessageCircle, BarChart3 } from "lucide-react";
+import { LayoutDashboard, FileText, BookOpen, Calendar, GraduationCap, Building2, Users, Bell, Settings, HelpCircle, Newspaper, Shield, MessageCircle, BarChart3, FileType2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface NavItem {
@@ -16,6 +16,8 @@ const mainNav: NavItem[] = [
 const academicsNav: NavItem[] = [
   { icon: GraduationCap, label: "My Courses", key: "courses" },
   { icon: Building2, label: "Departments", key: "departments" },
+  { icon: FileType2, label: "Handouts", key: "handouts" },
+  { icon: Calendar, label: "Timetable", key: "timetable" },
   { icon: BarChart3, label: "Results", key: "results" },
 ];
 

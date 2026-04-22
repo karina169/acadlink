@@ -269,6 +269,69 @@ export type Database = {
         }
         Relationships: []
       }
+      handouts: {
+        Row: {
+          course_id: string | null
+          created_at: string
+          department_id: string | null
+          description: string | null
+          file_name: string
+          file_size: string | null
+          file_type: string | null
+          file_url: string
+          id: string
+          level: string | null
+          title: string
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          course_id?: string | null
+          created_at?: string
+          department_id?: string | null
+          description?: string | null
+          file_name: string
+          file_size?: string | null
+          file_type?: string | null
+          file_url: string
+          id?: string
+          level?: string | null
+          title: string
+          updated_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          course_id?: string | null
+          created_at?: string
+          department_id?: string | null
+          description?: string | null
+          file_name?: string
+          file_size?: string | null
+          file_type?: string | null
+          file_url?: string
+          id?: string
+          level?: string | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "handouts_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "handouts_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string | null
@@ -301,6 +364,72 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      past_questions: {
+        Row: {
+          course_id: string | null
+          created_at: string
+          department_id: string | null
+          downloads: number
+          file_name: string
+          file_url: string
+          id: string
+          level: string | null
+          pages: number | null
+          semester: string | null
+          session: string | null
+          title: string
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          course_id?: string | null
+          created_at?: string
+          department_id?: string | null
+          downloads?: number
+          file_name: string
+          file_url: string
+          id?: string
+          level?: string | null
+          pages?: number | null
+          semester?: string | null
+          session?: string | null
+          title: string
+          updated_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          course_id?: string | null
+          created_at?: string
+          department_id?: string | null
+          downloads?: number
+          file_name?: string
+          file_url?: string
+          id?: string
+          level?: string | null
+          pages?: number | null
+          semester?: string | null
+          session?: string | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "past_questions_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "past_questions_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       post_attachments: {
         Row: {
@@ -437,6 +566,131 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      student_results: {
+        Row: {
+          course_code: string
+          course_id: string | null
+          course_title: string | null
+          created_at: string
+          grade: string
+          id: string
+          score: number | null
+          semester: string
+          session: string
+          student_id: string
+          units: number
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          course_code: string
+          course_id?: string | null
+          course_title?: string | null
+          created_at?: string
+          grade: string
+          id?: string
+          score?: number | null
+          semester: string
+          session: string
+          student_id: string
+          units?: number
+          updated_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          course_code?: string
+          course_id?: string | null
+          course_title?: string | null
+          created_at?: string
+          grade?: string
+          id?: string
+          score?: number | null
+          semester?: string
+          session?: string
+          student_id?: string
+          units?: number
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_results_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      timetable_entries: {
+        Row: {
+          course_code: string | null
+          course_id: string | null
+          course_title: string | null
+          created_at: string
+          created_by: string
+          day_of_week: string
+          department_id: string | null
+          end_time: string
+          id: string
+          lecturer: string | null
+          level: string | null
+          semester: string
+          start_time: string
+          updated_at: string
+          venue: string | null
+        }
+        Insert: {
+          course_code?: string | null
+          course_id?: string | null
+          course_title?: string | null
+          created_at?: string
+          created_by: string
+          day_of_week: string
+          department_id?: string | null
+          end_time: string
+          id?: string
+          lecturer?: string | null
+          level?: string | null
+          semester?: string
+          start_time: string
+          updated_at?: string
+          venue?: string | null
+        }
+        Update: {
+          course_code?: string | null
+          course_id?: string | null
+          course_title?: string | null
+          created_at?: string
+          created_by?: string
+          day_of_week?: string
+          department_id?: string | null
+          end_time?: string
+          id?: string
+          lecturer?: string | null
+          level?: string | null
+          semester?: string
+          start_time?: string
+          updated_at?: string
+          venue?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timetable_entries_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timetable_entries_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {

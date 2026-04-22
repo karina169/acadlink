@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
-type Tab = "overview" | "users" | "content" | "faculties" | "roles" | "news";
+type Tab = "overview" | "users" | "content" | "faculties" | "roles" | "news" | "uploads";
 
 const AdminDashboard = () => {
   const [tab, setTab] = useState<Tab>("overview");
@@ -24,6 +24,7 @@ const AdminDashboard = () => {
           { key: "roles", label: "Roles", icon: UserCog },
           { key: "content", label: "Content", icon: FileText },
           { key: "news", label: "News", icon: Newspaper },
+          { key: "uploads", label: "Uploads", icon: BookOpen },
           { key: "faculties", label: "Academics", icon: GraduationCap },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setTab(key)}
@@ -40,6 +41,7 @@ const AdminDashboard = () => {
       {tab === "roles" && <RolesTab />}
       {tab === "content" && <ContentTab />}
       {tab === "news" && <NewsTab />}
+      {tab === "uploads" && <UploadsTab />}
       {tab === "faculties" && <FacultiesTab />}
     </div>
   );
@@ -464,6 +466,432 @@ const NewsTab = () => {
           </div>
         ))}
         {news.length === 0 && <p className="text-center text-sm text-muted-foreground py-6">No news yet.</p>}
+      </div>
+    </div>
+  );
+};
+
+// =================== UPLOADS TAB ===================
+type UploadKind = "handouts" | "past_questions" | "timetable" | "results";
+
+const UploadsTab = () => {
+  const [kind, setKind] = useState<UploadKind>("handouts");
+  return (
+    <div>
+      <div className="flex gap-1.5 mb-4 flex-wrap">
+        {([
+          { k: "handouts", label: "Handouts" },
+          { k: "past_questions", label: "Past Questions" },
+          { k: "timetable", label: "Timetable" },
+          { k: "results", label: "Results" },
+        ] as const).map(({ k, label }) => (
+          <button key={k} onClick={() => setKind(k)}
+            className={`filter-pill ${kind === k ? "filter-pill-active" : ""}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {kind === "handouts" && <HandoutsAdmin />}
+      {kind === "past_questions" && <PastQuestionsAdmin />}
+      {kind === "timetable" && <TimetableAdmin />}
+      {kind === "results" && <ResultsAdmin />}
+    </div>
+  );
+};
+
+const useScopeOptions = () => {
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
+  useEffect(() => {
+    supabase.from("departments").select("id, name").order("name").then(({ data }) => setDepartments(data || []));
+    supabase.from("courses").select("id, code, title, department_id").order("code").then(({ data }) => setCourses(data || []));
+  }, []);
+  return { departments, courses };
+};
+
+const uploadFile = async (file: File, folder: string): Promise<{ url: string; size: string } | null> => {
+  const path = `${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+  const { error } = await supabase.storage.from("academic-files").upload(path, file);
+  if (error) { toast.error(error.message); return null; }
+  const { data } = supabase.storage.from("academic-files").getPublicUrl(path);
+  const sizeKB = file.size / 1024;
+  const size = sizeKB > 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${Math.round(sizeKB)} KB`;
+  return { url: data.publicUrl, size };
+};
+
+const LEVELS = ["100", "200", "300", "400", "500"];
+
+const HandoutsAdmin = () => {
+  const { departments, courses } = useScopeOptions();
+  const [form, setForm] = useState({ title: "", description: "", department_id: "", level: "", course_id: "" });
+  const [file, setFile] = useState<File | null>(null);
+  const [items, setItems] = useState<any[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    const { data } = await supabase.from("handouts").select("id, title, level, created_at, departments(name), courses(code)").order("created_at", { ascending: false }).limit(50);
+    setItems(data || []);
+  };
+  useEffect(() => { load(); }, []);
+
+  const submit = async () => {
+    if (!form.title.trim() || !file) return toast.error("Title and file required");
+    setBusy(true);
+    const up = await uploadFile(file, "handouts");
+    if (!up) { setBusy(false); return; }
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from("handouts").insert({
+      title: form.title.trim(),
+      description: form.description.trim() || null,
+      department_id: form.department_id || null,
+      level: form.level || null,
+      course_id: form.course_id || null,
+      file_url: up.url, file_name: file.name, file_size: up.size, file_type: file.type,
+      uploaded_by: user!.id,
+    });
+    setBusy(false);
+    if (error) return toast.error(error.message);
+    toast.success("Handout uploaded");
+    setForm({ title: "", description: "", department_id: "", level: "", course_id: "" });
+    setFile(null);
+    load();
+  };
+
+  const remove = async (id: string) => {
+    await supabase.from("handouts").delete().eq("id", id);
+    load();
+  };
+
+  const filteredCourses = form.department_id ? courses.filter((c) => c.department_id === form.department_id) : courses;
+
+  return (
+    <div className="space-y-3">
+      <div className="content-card space-y-2">
+        <h3 className="section-label">Upload Handout</h3>
+        <Input placeholder="Title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="h-9 text-sm" />
+        <textarea placeholder="Description (optional)" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2}
+          className="w-full px-3 py-2 rounded-md border border-input bg-transparent text-sm" />
+        <div className="grid grid-cols-2 gap-2">
+          <select value={form.department_id} onChange={e => setForm({ ...form, department_id: e.target.value, course_id: "" })}
+            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+            <option value="">All departments</option>
+            {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+          <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })}
+            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+            <option value="">All levels</option>
+            {LEVELS.map(l => <option key={l} value={l}>{l}L</option>)}
+          </select>
+        </div>
+        <select value={form.course_id} onChange={e => setForm({ ...form, course_id: e.target.value })}
+          className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+          <option value="">No specific course</option>
+          {filteredCourses.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.title}</option>)}
+        </select>
+        <input type="file" onChange={e => setFile(e.target.files?.[0] || null)} className="text-xs" />
+        <Button size="sm" onClick={submit} disabled={busy} className="w-full gap-1"><Plus className="w-3 h-3" /> {busy ? "Uploading..." : "Upload"}</Button>
+      </div>
+
+      <div className="space-y-2">
+        {items.map((h) => (
+          <div key={h.id} className="content-card flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold truncate">{h.title}</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                {[h.courses?.code, h.departments?.name, h.level && `${h.level}L`].filter(Boolean).join(" · ") || "All scopes"}
+              </div>
+            </div>
+            <button onClick={() => remove(h.id)} className="text-muted-foreground hover:text-destructive bg-transparent border-none cursor-pointer">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+        {items.length === 0 && <p className="text-center text-sm text-muted-foreground py-6">No handouts uploaded.</p>}
+      </div>
+    </div>
+  );
+};
+
+const PastQuestionsAdmin = () => {
+  const { departments, courses } = useScopeOptions();
+  const [form, setForm] = useState({ title: "", session: "", semester: "1st", pages: "", department_id: "", level: "", course_id: "" });
+  const [file, setFile] = useState<File | null>(null);
+  const [items, setItems] = useState<any[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    const { data } = await supabase.from("past_questions").select("id, title, session, semester, level, departments(name), courses(code)").order("created_at", { ascending: false }).limit(50);
+    setItems(data || []);
+  };
+  useEffect(() => { load(); }, []);
+
+  const submit = async () => {
+    if (!form.title.trim() || !file) return toast.error("Title and file required");
+    setBusy(true);
+    const up = await uploadFile(file, "past_questions");
+    if (!up) { setBusy(false); return; }
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from("past_questions").insert({
+      title: form.title.trim(),
+      session: form.session.trim() || null,
+      semester: form.semester || null,
+      pages: form.pages ? parseInt(form.pages) : null,
+      department_id: form.department_id || null,
+      level: form.level || null,
+      course_id: form.course_id || null,
+      file_url: up.url, file_name: file.name,
+      uploaded_by: user!.id,
+    });
+    setBusy(false);
+    if (error) return toast.error(error.message);
+    toast.success("Past question uploaded");
+    setForm({ title: "", session: "", semester: "1st", pages: "", department_id: "", level: "", course_id: "" });
+    setFile(null);
+    load();
+  };
+
+  const remove = async (id: string) => { await supabase.from("past_questions").delete().eq("id", id); load(); };
+
+  const filteredCourses = form.department_id ? courses.filter((c) => c.department_id === form.department_id) : courses;
+
+  return (
+    <div className="space-y-3">
+      <div className="content-card space-y-2">
+        <h3 className="section-label">Upload Past Question</h3>
+        <Input placeholder="Title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="h-9 text-sm" />
+        <div className="grid grid-cols-3 gap-2">
+          <Input placeholder="Session (2024/25)" value={form.session} onChange={e => setForm({ ...form, session: e.target.value })} className="h-9 text-sm" />
+          <select value={form.semester} onChange={e => setForm({ ...form, semester: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+            <option value="1st">1st Sem</option><option value="2nd">2nd Sem</option>
+          </select>
+          <Input type="number" placeholder="Pages" value={form.pages} onChange={e => setForm({ ...form, pages: e.target.value })} className="h-9 text-sm" />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <select value={form.department_id} onChange={e => setForm({ ...form, department_id: e.target.value, course_id: "" })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+            <option value="">All departments</option>
+            {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+          <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+            <option value="">All levels</option>
+            {LEVELS.map(l => <option key={l} value={l}>{l}L</option>)}
+          </select>
+        </div>
+        <select value={form.course_id} onChange={e => setForm({ ...form, course_id: e.target.value })} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+          <option value="">No specific course</option>
+          {filteredCourses.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.title}</option>)}
+        </select>
+        <input type="file" onChange={e => setFile(e.target.files?.[0] || null)} className="text-xs" />
+        <Button size="sm" onClick={submit} disabled={busy} className="w-full gap-1"><Plus className="w-3 h-3" /> {busy ? "Uploading..." : "Upload"}</Button>
+      </div>
+
+      <div className="space-y-2">
+        {items.map((p) => (
+          <div key={p.id} className="content-card flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold truncate">{p.title}</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                {[p.courses?.code, p.departments?.name, p.level && `${p.level}L`, p.session, p.semester].filter(Boolean).join(" · ")}
+              </div>
+            </div>
+            <button onClick={() => remove(p.id)} className="text-muted-foreground hover:text-destructive bg-transparent border-none cursor-pointer">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+        {items.length === 0 && <p className="text-center text-sm text-muted-foreground py-6">No past questions uploaded.</p>}
+      </div>
+    </div>
+  );
+};
+
+const TimetableAdmin = () => {
+  const { departments, courses } = useScopeOptions();
+  const [form, setForm] = useState({
+    department_id: "", level: "", semester: "1st", course_id: "",
+    course_code: "", course_title: "", day_of_week: "Monday",
+    start_time: "08:00", end_time: "10:00", venue: "", lecturer: "",
+  });
+  const [items, setItems] = useState<any[]>([]);
+
+  const load = async () => {
+    const { data } = await supabase.from("timetable_entries")
+      .select("id, semester, day_of_week, start_time, end_time, venue, course_code, level, departments(name)")
+      .order("created_at", { ascending: false }).limit(100);
+    setItems(data || []);
+  };
+  useEffect(() => { load(); }, []);
+
+  const submit = async () => {
+    if (!form.day_of_week || !form.start_time || !form.end_time) return toast.error("Day & times required");
+    const { data: { user } } = await supabase.auth.getUser();
+    const linkedCourse = courses.find((c) => c.id === form.course_id);
+    const { error } = await supabase.from("timetable_entries").insert({
+      department_id: form.department_id || null,
+      level: form.level || null,
+      semester: form.semester,
+      course_id: form.course_id || null,
+      course_code: linkedCourse?.code || form.course_code || null,
+      course_title: linkedCourse?.title || form.course_title || null,
+      day_of_week: form.day_of_week,
+      start_time: form.start_time,
+      end_time: form.end_time,
+      venue: form.venue.trim() || null,
+      lecturer: form.lecturer.trim() || null,
+      created_by: user!.id,
+    });
+    if (error) return toast.error(error.message);
+    toast.success("Timetable entry added");
+    setForm({ ...form, course_id: "", course_code: "", course_title: "", venue: "", lecturer: "" });
+    load();
+  };
+
+  const remove = async (id: string) => { await supabase.from("timetable_entries").delete().eq("id", id); load(); };
+  const filteredCourses = form.department_id ? courses.filter((c) => c.department_id === form.department_id) : courses;
+
+  return (
+    <div className="space-y-3">
+      <div className="content-card space-y-2">
+        <h3 className="section-label">Add Timetable Entry</h3>
+        <div className="grid grid-cols-2 gap-2">
+          <select value={form.department_id} onChange={e => setForm({ ...form, department_id: e.target.value, course_id: "" })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+            <option value="">All departments</option>
+            {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+          <select value={form.level} onChange={e => setForm({ ...form, level: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+            <option value="">All levels</option>
+            {LEVELS.map(l => <option key={l} value={l}>{l}L</option>)}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <select value={form.semester} onChange={e => setForm({ ...form, semester: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+            <option value="1st">1st Sem</option><option value="2nd">2nd Sem</option>
+          </select>
+          <select value={form.day_of_week} onChange={e => setForm({ ...form, day_of_week: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+            {["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+        <select value={form.course_id} onChange={e => setForm({ ...form, course_id: e.target.value })} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+          <option value="">— Free text course below —</option>
+          {filteredCourses.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.title}</option>)}
+        </select>
+        {!form.course_id && (
+          <div className="grid grid-cols-2 gap-2">
+            <Input placeholder="Course code" value={form.course_code} onChange={e => setForm({ ...form, course_code: e.target.value })} className="h-9 text-sm" />
+            <Input placeholder="Course title" value={form.course_title} onChange={e => setForm({ ...form, course_title: e.target.value })} className="h-9 text-sm" />
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <Input type="time" value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} className="h-9 text-sm" />
+          <Input type="time" value={form.end_time} onChange={e => setForm({ ...form, end_time: e.target.value })} className="h-9 text-sm" />
+        </div>
+        <Input placeholder="Venue" value={form.venue} onChange={e => setForm({ ...form, venue: e.target.value })} className="h-9 text-sm" />
+        <Input placeholder="Lecturer" value={form.lecturer} onChange={e => setForm({ ...form, lecturer: e.target.value })} className="h-9 text-sm" />
+        <Button size="sm" onClick={submit} className="w-full gap-1"><Plus className="w-3 h-3" /> Add Entry</Button>
+      </div>
+
+      <div className="space-y-2">
+        {items.map((e) => (
+          <div key={e.id} className="content-card flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold">{e.course_code || "Class"} — {e.day_of_week}</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                {e.start_time}–{e.end_time} · {e.venue || "—"} · {[e.departments?.name, e.level && `${e.level}L`, `${e.semester} sem`].filter(Boolean).join(" · ")}
+              </div>
+            </div>
+            <button onClick={() => remove(e.id)} className="text-muted-foreground hover:text-destructive bg-transparent border-none cursor-pointer">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+        {items.length === 0 && <p className="text-center text-sm text-muted-foreground py-6">No timetable entries yet.</p>}
+      </div>
+    </div>
+  );
+};
+
+const ResultsAdmin = () => {
+  const [students, setStudents] = useState<any[]>([]);
+  const [form, setForm] = useState({ student_id: "", session: "", semester: "1st", course_code: "", course_title: "", units: "3", score: "", grade: "A" });
+  const [items, setItems] = useState<any[]>([]);
+
+  useEffect(() => {
+    supabase.from("profiles").select("user_id, display_name, matric_number").order("display_name").then(({ data }) => setStudents(data || []));
+  }, []);
+
+  const load = async () => {
+    const { data } = await supabase.from("student_results").select("id, session, semester, course_code, grade, score, student_id").order("created_at", { ascending: false }).limit(100);
+    setItems(data || []);
+  };
+  useEffect(() => { load(); }, []);
+
+  const submit = async () => {
+    if (!form.student_id || !form.session.trim() || !form.course_code.trim() || !form.grade.trim()) return toast.error("Student, session, course & grade required");
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from("student_results").insert({
+      student_id: form.student_id,
+      session: form.session.trim(),
+      semester: form.semester,
+      course_code: form.course_code.trim().toUpperCase(),
+      course_title: form.course_title.trim() || null,
+      units: parseInt(form.units) || 3,
+      score: form.score ? parseFloat(form.score) : null,
+      grade: form.grade.trim().toUpperCase(),
+      uploaded_by: user!.id,
+    });
+    if (error) return toast.error(error.message);
+    toast.success("Result added");
+    setForm({ ...form, course_code: "", course_title: "", score: "" });
+    load();
+  };
+
+  const remove = async (id: string) => { await supabase.from("student_results").delete().eq("id", id); load(); };
+
+  const studentLabel = (id: string) => {
+    const s = students.find((x) => x.user_id === id);
+    return s ? `${s.display_name || "?"}${s.matric_number ? ` (${s.matric_number})` : ""}` : id.slice(0, 8);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="content-card space-y-2">
+        <h3 className="section-label">Add Result</h3>
+        <select value={form.student_id} onChange={e => setForm({ ...form, student_id: e.target.value })} className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+          <option value="">Select student</option>
+          {students.map((s) => <option key={s.user_id} value={s.user_id}>{s.display_name || "No name"} {s.matric_number ? `· ${s.matric_number}` : ""}</option>)}
+        </select>
+        <div className="grid grid-cols-2 gap-2">
+          <Input placeholder="Session (2024/2025)" value={form.session} onChange={e => setForm({ ...form, session: e.target.value })} className="h-9 text-sm" />
+          <select value={form.semester} onChange={e => setForm({ ...form, semester: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+            <option value="1st">1st Sem</option><option value="2nd">2nd Sem</option>
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Input placeholder="Course code" value={form.course_code} onChange={e => setForm({ ...form, course_code: e.target.value })} className="h-9 text-sm" />
+          <Input placeholder="Course title" value={form.course_title} onChange={e => setForm({ ...form, course_title: e.target.value })} className="h-9 text-sm" />
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <Input type="number" placeholder="Units" value={form.units} onChange={e => setForm({ ...form, units: e.target.value })} className="h-9 text-sm" />
+          <Input type="number" placeholder="Score" value={form.score} onChange={e => setForm({ ...form, score: e.target.value })} className="h-9 text-sm" />
+          <select value={form.grade} onChange={e => setForm({ ...form, grade: e.target.value })} className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+            {["A","B","C","D","E","F"].map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+        </div>
+        <Button size="sm" onClick={submit} className="w-full gap-1"><Plus className="w-3 h-3" /> Add Result</Button>
+      </div>
+
+      <div className="space-y-2">
+        {items.map((r) => (
+          <div key={r.id} className="content-card flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold truncate">{studentLabel(r.student_id)}</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">{r.course_code} · {r.session} {r.semester} · Grade {r.grade}{r.score != null ? ` (${r.score})` : ""}</div>
+            </div>
+            <button onClick={() => remove(r.id)} className="text-muted-foreground hover:text-destructive bg-transparent border-none cursor-pointer">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+        {items.length === 0 && <p className="text-center text-sm text-muted-foreground py-6">No results uploaded.</p>}
       </div>
     </div>
   );

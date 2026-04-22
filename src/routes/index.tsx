@@ -17,6 +17,8 @@ import StudyGroupsPanel from "@/components/panels/StudyGroupsPanel";
 import EventsPanel from "@/components/panels/EventsPanel";
 import NotificationsPanel from "@/components/panels/NotificationsPanel";
 import ResultsPanel from "@/components/panels/ResultsPanel";
+import HandoutsPanel from "@/components/panels/HandoutsPanel";
+import TimetablePanel from "@/components/panels/TimetablePanel";
 import HelpPanel from "@/components/panels/HelpPanel";
 import SettingsPanel from "@/components/panels/SettingsPanel";
 import CampusNewsPanel from "@/components/panels/CampusNewsPanel";
@@ -136,6 +138,8 @@ function Index() {
       case "courses": return <CoursesPanel />;
       case "departments": return <DepartmentsPanel />;
       case "results": return <ResultsPanel />;
+      case "handouts": return <HandoutsPanel />;
+      case "timetable": return <TimetablePanel />;
       case "study-groups": return <StudyGroupsPanel />;
       case "events": return <EventsPanel />;
       case "course-chats": return <CourseChatsPanel />;
