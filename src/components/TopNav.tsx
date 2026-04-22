@@ -57,14 +57,14 @@ const TopNav = ({ userInitials, onMenuToggle }: TopNavProps) => {
           <Search className="w-4 h-4" />
         </button>
 
-        <a href="https://xvaultplayer.lovable.app/" target="_blank" rel="noopener noreferrer" className="relative p-2 rounded-md hover:bg-muted text-muted-foreground transition-colors">
+        <button onClick={() => window.dispatchEvent(new CustomEvent("acadlink:navigate", { detail: "notifications" }))} className="relative p-2 rounded-md hover:bg-muted text-muted-foreground transition-colors bg-transparent border-none cursor-pointer">
           <Bell className="w-4 h-4" />
           {notifCount > 0 && (
             <span className="absolute top-1 right-1 w-4 h-4 bg-destructive text-destructive-foreground text-[10px] font-semibold rounded-full flex items-center justify-center">
               {notifCount > 9 ? "9+" : notifCount}
             </span>
           )}
-        </a>
+        </button>
 
         <div className="h-5 w-px bg-border mx-1" />
 

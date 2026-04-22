@@ -48,6 +48,16 @@ function Index() {
 
   useEffect(() => { setMounted(true); }, []);
 
+  // Listen for top-nav navigation events (e.g. notification bell)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (typeof detail === "string") setActivePanel(detail);
+    };
+    window.addEventListener("acadlink:navigate", handler);
+    return () => window.removeEventListener("acadlink:navigate", handler);
+  }, []);
+
   useEffect(() => {
     if (!mounted) return;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
