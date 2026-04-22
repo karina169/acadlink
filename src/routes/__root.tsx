@@ -38,8 +38,8 @@ export const Route = createRootRoute({
       { name: "twitter:card", content: "summary" },
       { name: "twitter:title", content: "AcadLink" },
       { name: "twitter:description", content: "Past Questions, Courses, Departments, Course Chats and Student Feed for SSU students." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/ZggeJT1nPfZMeUB9r2ek5P2pMM92/social-images/social-1776686663391-1000562611.webp" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/ZggeJT1nPfZMeUB9r2ek5P2pMM92/social-images/social-1776686663391-1000562611.webp" },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/ZggeJT1nPfZMeUB9r2ek5P2pMM92/social-images/social-1776854563151-1000562611.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/ZggeJT1nPfZMeUB9r2ek5P2pMM92/social-images/social-1776854563151-1000562611.webp" },
     ],
     links: [
       {
