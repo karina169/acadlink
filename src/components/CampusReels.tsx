@@ -223,11 +223,32 @@ const CampusReels = ({ refreshKey }: { refreshKey?: number }) => {
   return (
     <div
       ref={containerRef}
-      className="rounded-xl overflow-hidden bg-black snap-y snap-mandatory overflow-y-scroll scrollbar-none"
-      style={{ height: "calc(100vh - 200px)", maxHeight: "720px" }}
+      className="rounded-xl overflow-hidden bg-black snap-y snap-mandatory overflow-y-scroll scrollbar-none overscroll-contain"
+      style={{
+        height: "calc(100vh - 200px)",
+        maxHeight: "720px",
+        WebkitOverflowScrolling: "touch",
+        touchAction: "pan-y",
+        scrollBehavior: "smooth",
+      }}
+      onWheel={(e) => {
+        if (Math.abs(e.deltaY) < 30) return;
+        const root = containerRef.current;
+        if (!root) return;
+        const h = root.clientHeight;
+        const target = Math.round(root.scrollTop / h) + (e.deltaY > 0 ? 1 : -1);
+        const clamped = Math.max(0, Math.min(reels.length - 1, target));
+        root.scrollTo({ top: clamped * h, behavior: "smooth" });
+        e.preventDefault();
+      }}
     >
       {reels.map((r, i) => (
-        <div key={r.post_id} data-reel-idx={i} className="h-full w-full">
+        <div
+          key={r.post_id}
+          data-reel-idx={i}
+          className="h-full w-full"
+          style={{ scrollSnapAlign: "start", scrollSnapStop: "always" }}
+        >
           <ReelItem
             reel={r}
             active={i === activeIdx}
