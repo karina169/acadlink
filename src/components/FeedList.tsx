@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { MessageCircle, ChevronDown, ChevronUp, Send, Trash2, Bookmark, BookmarkCheck, FileText, Download } from "lucide-react";
 import VerifiedBadge from "./VerifiedBadge";
+import CampusReels from "./CampusReels";
 
 interface PostData {
   id: string;
@@ -220,7 +221,7 @@ const FeedPost = ({ post, userId }: { post: PostData; userId: string }) => {
 const filterTabs = [
   { key: "all", label: "All" },
   { key: "live", label: "Live Event" },
-  { key: "creels", label: "C.Reels" },
+  { key: "creels", label: "Campus Reels" },
 ];
 
 const FeedList = ({ refreshKey }: { refreshKey?: number }) => {
@@ -301,7 +302,9 @@ const FeedList = ({ refreshKey }: { refreshKey?: number }) => {
         ))}
       </div>
 
-      {posts.length === 0 ? (
+      {filter === "creels" ? (
+        <CampusReels refreshKey={refreshKey} />
+      ) : posts.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <p className="text-sm">No posts yet. Be the first to share something!</p>
         </div>
