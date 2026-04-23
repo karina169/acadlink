@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Heart, MessageCircle, Volume2, VolumeX, Play } from "lucide-react";
+import { Heart, MessageCircle, Volume2, VolumeX, Play, X, Send, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import VerifiedBadge from "./VerifiedBadge";
 
 interface Reel {
@@ -19,9 +20,10 @@ interface Reel {
 const getInitials = (name: string | null | undefined) =>
   (name || "??").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
 
-const ReelItem = ({ reel, active, muted, onToggleMute, userId, onLikeChange }: {
+const ReelItem = ({ reel, active, muted, onToggleMute, userId, onLikeChange, onOpenComments }: {
   reel: Reel; active: boolean; muted: boolean; onToggleMute: () => void; userId: string;
   onLikeChange: (postId: string, liked: boolean) => void;
+  onOpenComments: (postId: string) => void;
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [paused, setPaused] = useState(false);
@@ -81,12 +83,15 @@ const ReelItem = ({ reel, active, muted, onToggleMute, userId, onLikeChange }: {
           </div>
           <span className="text-[11px] font-semibold drop-shadow">{reel.like_count}</span>
         </button>
-        <div className="flex flex-col items-center gap-0.5 text-white">
+        <button
+          onClick={() => onOpenComments(reel.post_id)}
+          className="flex flex-col items-center gap-0.5 bg-transparent border-none cursor-pointer text-white"
+        >
           <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm">
             <MessageCircle className="w-5 h-5" />
           </div>
           <span className="text-[11px] font-semibold drop-shadow">{reel.comment_count}</span>
-        </div>
+        </button>
       </div>
 
       {/* Bottom info */}
