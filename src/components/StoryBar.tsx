@@ -182,15 +182,31 @@ const StoryBar = ({ refreshKey }: { refreshKey?: number }) => {
 
   const openViewer = (list: Story[]) => setViewing({ list, index: 0 });
   const next = () => {
-    if (!viewing) return;
-    if (viewing.index + 1 >= viewing.list.length) setViewing(null);
-    else setViewing({ ...viewing, index: viewing.index + 1 });
+    setViewing(v => {
+      if (!v) return v;
+      if (v.index + 1 >= v.list.length) return null;
+      return { ...v, index: v.index + 1 };
+    });
   };
   const prev = () => {
-    if (!viewing) return;
-    if (viewing.index === 0) return;
-    setViewing({ ...viewing, index: viewing.index - 1 });
+    setViewing(v => {
+      if (!v) return v;
+      if (v.index === 0) return v;
+      return { ...v, index: v.index - 1 };
+    });
   };
+
+  // Keyboard controls for the viewer
+  useEffect(() => {
+    if (!viewing) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); next(); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); prev(); }
+      else if (e.key === "Escape") setViewing(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [viewing]);
 
   return (
     <div className="content-card !p-0 mb-3 overflow-hidden">
