@@ -412,14 +412,24 @@ const CampusReels = ({ refreshKey }: { refreshKey?: number }) => {
         >
           <ReelItem
             reel={r}
-            active={i === activeIdx}
+            active={i === activeIdx && openCommentsFor === null}
             muted={muted}
             onToggleMute={() => setMuted(m => !m)}
             userId={userId}
             onLikeChange={handleLikeChange}
+            onOpenComments={setOpenCommentsFor}
           />
         </div>
       ))}
+
+      {openCommentsFor && (
+        <CommentsSheet
+          postId={openCommentsFor}
+          userId={userId}
+          onClose={() => setOpenCommentsFor(null)}
+          onCountChange={handleCommentCountChange}
+        />
+      )}
     </div>
   );
 };
