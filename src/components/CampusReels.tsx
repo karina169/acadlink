@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Heart, MessageCircle, Volume2, VolumeX, Play } from "lucide-react";
+import { Heart, MessageCircle, Volume2, VolumeX, Play, X, Send, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import VerifiedBadge from "./VerifiedBadge";
 
 interface Reel {
@@ -19,9 +20,10 @@ interface Reel {
 const getInitials = (name: string | null | undefined) =>
   (name || "??").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
 
-const ReelItem = ({ reel, active, muted, onToggleMute, userId, onLikeChange }: {
+const ReelItem = ({ reel, active, muted, onToggleMute, userId, onLikeChange, onOpenComments }: {
   reel: Reel; active: boolean; muted: boolean; onToggleMute: () => void; userId: string;
   onLikeChange: (postId: string, liked: boolean) => void;
+  onOpenComments: (postId: string) => void;
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [paused, setPaused] = useState(false);
@@ -81,12 +83,15 @@ const ReelItem = ({ reel, active, muted, onToggleMute, userId, onLikeChange }: {
           </div>
           <span className="text-[11px] font-semibold drop-shadow">{reel.like_count}</span>
         </button>
-        <div className="flex flex-col items-center gap-0.5 text-white">
+        <button
+          onClick={() => onOpenComments(reel.post_id)}
+          className="flex flex-col items-center gap-0.5 bg-transparent border-none cursor-pointer text-white"
+        >
           <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm">
             <MessageCircle className="w-5 h-5" />
           </div>
           <span className="text-[11px] font-semibold drop-shadow">{reel.comment_count}</span>
-        </div>
+        </button>
       </div>
 
       {/* Bottom info */}
@@ -110,12 +115,162 @@ const ReelItem = ({ reel, active, muted, onToggleMute, userId, onLikeChange }: {
   );
 };
 
+interface ReelComment {
+  id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  profile?: { display_name: string | null; avatar_url: string | null; verified: boolean | null } | null;
+}
+
+const timeAgo = (iso: string) => {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "now";
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+};
+
+const CommentsSheet = ({ postId, userId, onClose, onCountChange }: {
+  postId: string; userId: string; onClose: () => void;
+  onCountChange: (postId: string, delta: number) => void;
+}) => {
+  const [comments, setComments] = useState<ReelComment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [text, setText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchComments = async () => {
+    const { data } = await supabase
+      .from("comments")
+      .select("id, user_id, content, created_at")
+      .eq("post_id", postId)
+      .order("created_at", { ascending: true });
+    if (data) {
+      const ids = [...new Set(data.map(c => c.user_id))];
+      const { data: profs } = await supabase
+        .from("profiles").select("user_id, display_name, avatar_url, verified").in("user_id", ids);
+      const pm = new Map((profs || []).map(p => [p.user_id, p]));
+      setComments(data.map(c => ({ ...c, profile: pm.get(c.user_id) })));
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchComments(); }, [postId]);
+
+  // Lock body scroll while sheet is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  const submit = async () => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setSubmitting(true);
+    const { error } = await supabase.from("comments")
+      .insert({ post_id: postId, user_id: userId, content: trimmed });
+    if (error) toast.error(error.message);
+    else {
+      setText("");
+      onCountChange(postId, 1);
+      fetchComments();
+    }
+    setSubmitting(false);
+  };
+
+  const remove = async (id: string) => {
+    const { error } = await supabase.from("comments").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    onCountChange(postId, -1);
+    fetchComments();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[90] flex flex-col justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 animate-in fade-in" />
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative bg-card rounded-t-2xl border-t border-border max-h-[75vh] flex flex-col animate-in slide-in-from-bottom duration-200"
+      >
+        <div className="flex items-center justify-center pt-2 pb-1">
+          <div className="w-10 h-1 rounded-full bg-muted-foreground/40" />
+        </div>
+        <div className="flex items-center justify-between px-4 pb-2 border-b border-border">
+          <h3 className="text-sm font-semibold">
+            Comments {comments.length > 0 && <span className="text-muted-foreground font-normal">· {comments.length}</span>}
+          </h3>
+          <button onClick={onClose} className="bg-transparent border-none cursor-pointer text-muted-foreground p-1">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          {loading ? (
+            <div className="text-center py-6">
+              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+            </div>
+          ) : comments.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-8">Be the first to comment.</p>
+          ) : (
+            comments.map(c => (
+              <div key={c.id} className="flex gap-2 items-start">
+                {c.profile?.avatar_url ? (
+                  <img src={c.profile.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-semibold text-muted-foreground flex-shrink-0">
+                    {getInitials(c.profile?.display_name)}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold flex items-center gap-0.5 truncate">
+                      {c.profile?.display_name || "User"}
+                      <VerifiedBadge verified={c.profile?.verified} className="w-3 h-3" />
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">{timeAgo(c.created_at)}</span>
+                  </div>
+                  <p className="text-xs text-foreground/85 mt-0.5 break-words">{c.content}</p>
+                </div>
+                {c.user_id === userId && (
+                  <button onClick={() => remove(c.id)} className="text-muted-foreground hover:text-destructive bg-transparent border-none cursor-pointer p-1">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="border-t border-border p-3 flex gap-2 items-center" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
+            placeholder="Add a comment..."
+            className="flex-1 h-9 px-3 rounded-full border border-input bg-muted/40 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <button
+            onClick={submit}
+            disabled={submitting || !text.trim()}
+            className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center border-none cursor-pointer disabled:opacity-40"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const CampusReels = ({ refreshKey }: { refreshKey?: number }) => {
   const [reels, setReels] = useState<Reel[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIdx, setActiveIdx] = useState(0);
   const [muted, setMuted] = useState(true);
   const [userId, setUserId] = useState("");
+  const [openCommentsFor, setOpenCommentsFor] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
@@ -203,6 +358,12 @@ const CampusReels = ({ refreshKey }: { refreshKey?: number }) => {
       : r));
   };
 
+  const handleCommentCountChange = (postId: string, delta: number) => {
+    setReels(rs => rs.map(r => r.post_id === postId
+      ? { ...r, comment_count: Math.max(0, r.comment_count + delta) }
+      : r));
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -251,14 +412,24 @@ const CampusReels = ({ refreshKey }: { refreshKey?: number }) => {
         >
           <ReelItem
             reel={r}
-            active={i === activeIdx}
+            active={i === activeIdx && openCommentsFor === null}
             muted={muted}
             onToggleMute={() => setMuted(m => !m)}
             userId={userId}
             onLikeChange={handleLikeChange}
+            onOpenComments={setOpenCommentsFor}
           />
         </div>
       ))}
+
+      {openCommentsFor && (
+        <CommentsSheet
+          postId={openCommentsFor}
+          userId={userId}
+          onClose={() => setOpenCommentsFor(null)}
+          onCountChange={handleCommentCountChange}
+        />
+      )}
     </div>
   );
 };
