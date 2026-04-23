@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Heart, MessageCircle, Volume2, VolumeX, Play, X, Send, Trash2 } from "lucide-react";
+import { Heart, MessageCircle, Volume2, VolumeX, Play, X, Send, Trash2, Plus, Video } from "lucide-react";
 import { toast } from "sonner";
 import VerifiedBadge from "./VerifiedBadge";
 
