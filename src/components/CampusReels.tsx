@@ -522,51 +522,71 @@ const CampusReels = ({ refreshKey }: { refreshKey?: number }) => {
     return (
       <div className="content-card text-center py-10">
         <p className="text-sm text-muted-foreground">No campus reels yet.</p>
-        <p className="text-xs text-muted-foreground mt-1">Post a video to start the reel.</p>
+        <p className="text-xs text-muted-foreground mt-1">Be the first to share a reel.</p>
+        <button
+          onClick={() => setCreating(true)}
+          className="mt-4 inline-flex items-center gap-1.5 px-4 h-9 rounded-full bg-primary text-primary-foreground text-sm font-semibold border-none cursor-pointer"
+        >
+          <Plus className="w-4 h-4" /> Create reel
+        </button>
+        {creating && userId && (
+          <CreateReelSheet userId={userId} onClose={() => setCreating(false)} onCreated={load} />
+        )}
       </div>
     );
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="rounded-xl overflow-hidden bg-black snap-y snap-mandatory overflow-y-scroll scrollbar-none overscroll-contain"
-      style={{
-        height: "calc(100vh - 200px)",
-        maxHeight: "720px",
-        WebkitOverflowScrolling: "touch",
-        touchAction: "pan-y",
-        scrollBehavior: "smooth",
-      }}
-      onWheel={(e) => {
-        if (Math.abs(e.deltaY) < 30) return;
-        const root = containerRef.current;
-        if (!root) return;
-        const h = root.clientHeight;
-        const target = Math.round(root.scrollTop / h) + (e.deltaY > 0 ? 1 : -1);
-        const clamped = Math.max(0, Math.min(reels.length - 1, target));
-        root.scrollTo({ top: clamped * h, behavior: "smooth" });
-        e.preventDefault();
-      }}
-    >
-      {reels.map((r, i) => (
-        <div
-          key={r.post_id}
-          data-reel-idx={i}
-          className="h-full w-full"
-          style={{ scrollSnapAlign: "start", scrollSnapStop: "always" }}
-        >
-          <ReelItem
-            reel={r}
-            active={i === activeIdx && openCommentsFor === null}
-            muted={muted}
-            onToggleMute={() => setMuted(m => !m)}
-            userId={userId}
-            onLikeChange={handleLikeChange}
-            onOpenComments={setOpenCommentsFor}
-          />
-        </div>
-      ))}
+    <div className="relative">
+      <div
+        ref={containerRef}
+        className="rounded-xl overflow-hidden bg-black snap-y snap-mandatory overflow-y-scroll scrollbar-none overscroll-contain"
+        style={{
+          height: "calc(100vh - 200px)",
+          maxHeight: "720px",
+          WebkitOverflowScrolling: "touch",
+          touchAction: "pan-y",
+          scrollBehavior: "smooth",
+        }}
+        onWheel={(e) => {
+          if (Math.abs(e.deltaY) < 30) return;
+          const root = containerRef.current;
+          if (!root) return;
+          const h = root.clientHeight;
+          const target = Math.round(root.scrollTop / h) + (e.deltaY > 0 ? 1 : -1);
+          const clamped = Math.max(0, Math.min(reels.length - 1, target));
+          root.scrollTo({ top: clamped * h, behavior: "smooth" });
+          e.preventDefault();
+        }}
+      >
+        {reels.map((r, i) => (
+          <div
+            key={r.post_id}
+            data-reel-idx={i}
+            className="h-full w-full"
+            style={{ scrollSnapAlign: "start", scrollSnapStop: "always" }}
+          >
+            <ReelItem
+              reel={r}
+              active={i === activeIdx && openCommentsFor === null && !creating}
+              muted={muted}
+              onToggleMute={() => setMuted(m => !m)}
+              userId={userId}
+              onLikeChange={handleLikeChange}
+              onOpenComments={setOpenCommentsFor}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Floating Create Reel button */}
+      <button
+        onClick={() => setCreating(true)}
+        className="absolute top-3 left-3 z-10 inline-flex items-center gap-1.5 px-3 h-9 rounded-full bg-primary text-primary-foreground text-xs font-semibold border-none cursor-pointer shadow-lg"
+        aria-label="Create reel"
+      >
+        <Plus className="w-4 h-4" /> Create
+      </button>
 
       {openCommentsFor && (
         <CommentsSheet
@@ -575,6 +595,10 @@ const CampusReels = ({ refreshKey }: { refreshKey?: number }) => {
           onClose={() => setOpenCommentsFor(null)}
           onCountChange={handleCommentCountChange}
         />
+      )}
+
+      {creating && userId && (
+        <CreateReelSheet userId={userId} onClose={() => setCreating(false)} onCreated={load} />
       )}
     </div>
   );
