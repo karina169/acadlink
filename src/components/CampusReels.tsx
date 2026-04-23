@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Heart, MessageCircle, Volume2, VolumeX, Play, X, Send, Trash2 } from "lucide-react";
+import { Heart, MessageCircle, Volume2, VolumeX, Play, X, Send, Trash2, Plus, Video } from "lucide-react";
 import { toast } from "sonner";
 import VerifiedBadge from "./VerifiedBadge";
 
@@ -264,6 +264,151 @@ const CommentsSheet = ({ postId, userId, onClose, onCountChange }: {
   );
 };
 
+const CreateReelSheet = ({ userId, onClose, onCreated }: {
+  userId: string; onClose: () => void; onCreated: () => void;
+}) => {
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [caption, setCaption] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  useEffect(() => {
+    if (!file) { setPreview(null); return; }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const pickFile = (f: File | null) => {
+    if (!f) return;
+    if (!f.type.startsWith("video/")) { toast.error("Please select a video file"); return; }
+    if (f.size > 50 * 1024 * 1024) { toast.error("Video must be under 50MB"); return; }
+    setFile(f);
+  };
+
+  const submit = async () => {
+    if (!file) { toast.error("Pick a video first"); return; }
+    setSubmitting(true);
+    try {
+      const { data: post, error: pErr } = await supabase
+        .from("posts")
+        .insert({ user_id: userId, content: caption.trim(), tag: "creels" })
+        .select().single();
+      if (pErr) throw pErr;
+
+      const ext = file.name.split(".").pop() || "mp4";
+      const path = `${userId}/reel_${post.id}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("post-files").upload(path, file, {
+        contentType: file.type,
+        upsert: false,
+      });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from("post-files").getPublicUrl(path);
+
+      const { error: aErr } = await supabase.from("post_attachments").insert({
+        post_id: post.id,
+        file_url: urlData.publicUrl,
+        file_name: file.name,
+        file_size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+        file_type: file.type,
+      });
+      if (aErr) throw aErr;
+
+      toast.success("Reel published");
+      onCreated();
+      onClose();
+    } catch (e: any) {
+      toast.error(e.message || "Upload failed");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[95] flex flex-col justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70" />
+      <div onClick={(e) => e.stopPropagation()} className="relative bg-card rounded-t-2xl border-t border-border max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-200">
+        <div className="flex items-center justify-center pt-2 pb-1">
+          <div className="w-10 h-1 rounded-full bg-muted-foreground/40" />
+        </div>
+        <div className="flex items-center justify-between px-4 pb-2 border-b border-border">
+          <h3 className="text-sm font-semibold">New Campus Reel</h3>
+          <button onClick={onClose} className="bg-transparent border-none cursor-pointer text-muted-foreground p-1">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {preview ? (
+            <div className="relative rounded-xl overflow-hidden bg-black aspect-[9/16] max-h-[55vh] mx-auto w-full">
+              <video src={preview} controls playsInline className="w-full h-full object-contain" />
+              <button
+                onClick={() => setFile(null)}
+                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center border-none cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => inputRef.current?.click()}
+              className="w-full aspect-[9/16] max-h-[55vh] rounded-xl border-2 border-dashed border-border bg-muted/40 hover:bg-muted/60 transition-colors flex flex-col items-center justify-center gap-2 cursor-pointer"
+            >
+              <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                <Video className="w-6 h-6" />
+              </div>
+              <div className="text-sm font-semibold">Tap to select a video</div>
+              <div className="text-[11px] text-muted-foreground">MP4, MOV · up to 50MB</div>
+            </button>
+          )}
+
+          <input
+            ref={inputRef}
+            type="file"
+            accept="video/*"
+            hidden
+            onChange={(e) => { pickFile(e.target.files?.[0] || null); if (inputRef.current) inputRef.current.value = ""; }}
+          />
+
+          <textarea
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            maxLength={500}
+            rows={2}
+            placeholder="Write a caption..."
+            className="w-full p-3 rounded-lg bg-muted border border-border text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <div className="text-[11px] text-muted-foreground text-right">{caption.length}/500</div>
+        </div>
+
+        <div className="border-t border-border p-3 flex gap-2 items-center" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 h-10 rounded-full border border-border bg-transparent text-sm font-semibold cursor-pointer disabled:opacity-40"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={submitting || !file}
+            className="flex-1 h-10 rounded-full bg-primary text-primary-foreground text-sm font-semibold border-none cursor-pointer disabled:opacity-40"
+          >
+            {submitting ? "Publishing…" : "Publish reel"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const CampusReels = ({ refreshKey }: { refreshKey?: number }) => {
   const [reels, setReels] = useState<Reel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -271,6 +416,7 @@ const CampusReels = ({ refreshKey }: { refreshKey?: number }) => {
   const [muted, setMuted] = useState(true);
   const [userId, setUserId] = useState("");
   const [openCommentsFor, setOpenCommentsFor] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
@@ -376,51 +522,71 @@ const CampusReels = ({ refreshKey }: { refreshKey?: number }) => {
     return (
       <div className="content-card text-center py-10">
         <p className="text-sm text-muted-foreground">No campus reels yet.</p>
-        <p className="text-xs text-muted-foreground mt-1">Post a video to start the reel.</p>
+        <p className="text-xs text-muted-foreground mt-1">Be the first to share a reel.</p>
+        <button
+          onClick={() => setCreating(true)}
+          className="mt-4 inline-flex items-center gap-1.5 px-4 h-9 rounded-full bg-primary text-primary-foreground text-sm font-semibold border-none cursor-pointer"
+        >
+          <Plus className="w-4 h-4" /> Create reel
+        </button>
+        {creating && userId && (
+          <CreateReelSheet userId={userId} onClose={() => setCreating(false)} onCreated={load} />
+        )}
       </div>
     );
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="rounded-xl overflow-hidden bg-black snap-y snap-mandatory overflow-y-scroll scrollbar-none overscroll-contain"
-      style={{
-        height: "calc(100vh - 200px)",
-        maxHeight: "720px",
-        WebkitOverflowScrolling: "touch",
-        touchAction: "pan-y",
-        scrollBehavior: "smooth",
-      }}
-      onWheel={(e) => {
-        if (Math.abs(e.deltaY) < 30) return;
-        const root = containerRef.current;
-        if (!root) return;
-        const h = root.clientHeight;
-        const target = Math.round(root.scrollTop / h) + (e.deltaY > 0 ? 1 : -1);
-        const clamped = Math.max(0, Math.min(reels.length - 1, target));
-        root.scrollTo({ top: clamped * h, behavior: "smooth" });
-        e.preventDefault();
-      }}
-    >
-      {reels.map((r, i) => (
-        <div
-          key={r.post_id}
-          data-reel-idx={i}
-          className="h-full w-full"
-          style={{ scrollSnapAlign: "start", scrollSnapStop: "always" }}
-        >
-          <ReelItem
-            reel={r}
-            active={i === activeIdx && openCommentsFor === null}
-            muted={muted}
-            onToggleMute={() => setMuted(m => !m)}
-            userId={userId}
-            onLikeChange={handleLikeChange}
-            onOpenComments={setOpenCommentsFor}
-          />
-        </div>
-      ))}
+    <div className="relative">
+      <div
+        ref={containerRef}
+        className="rounded-xl overflow-hidden bg-black snap-y snap-mandatory overflow-y-scroll scrollbar-none overscroll-contain"
+        style={{
+          height: "calc(100vh - 200px)",
+          maxHeight: "720px",
+          WebkitOverflowScrolling: "touch",
+          touchAction: "pan-y",
+          scrollBehavior: "smooth",
+        }}
+        onWheel={(e) => {
+          if (Math.abs(e.deltaY) < 30) return;
+          const root = containerRef.current;
+          if (!root) return;
+          const h = root.clientHeight;
+          const target = Math.round(root.scrollTop / h) + (e.deltaY > 0 ? 1 : -1);
+          const clamped = Math.max(0, Math.min(reels.length - 1, target));
+          root.scrollTo({ top: clamped * h, behavior: "smooth" });
+          e.preventDefault();
+        }}
+      >
+        {reels.map((r, i) => (
+          <div
+            key={r.post_id}
+            data-reel-idx={i}
+            className="h-full w-full"
+            style={{ scrollSnapAlign: "start", scrollSnapStop: "always" }}
+          >
+            <ReelItem
+              reel={r}
+              active={i === activeIdx && openCommentsFor === null && !creating}
+              muted={muted}
+              onToggleMute={() => setMuted(m => !m)}
+              userId={userId}
+              onLikeChange={handleLikeChange}
+              onOpenComments={setOpenCommentsFor}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Floating Create Reel button */}
+      <button
+        onClick={() => setCreating(true)}
+        className="absolute top-3 left-3 z-10 inline-flex items-center gap-1.5 px-3 h-9 rounded-full bg-primary text-primary-foreground text-xs font-semibold border-none cursor-pointer shadow-lg"
+        aria-label="Create reel"
+      >
+        <Plus className="w-4 h-4" /> Create
+      </button>
 
       {openCommentsFor && (
         <CommentsSheet
@@ -429,6 +595,10 @@ const CampusReels = ({ refreshKey }: { refreshKey?: number }) => {
           onClose={() => setOpenCommentsFor(null)}
           onCountChange={handleCommentCountChange}
         />
+      )}
+
+      {creating && userId && (
+        <CreateReelSheet userId={userId} onClose={() => setCreating(false)} onCreated={load} />
       )}
     </div>
   );
