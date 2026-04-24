@@ -1326,7 +1326,7 @@ function SystemSettingsPanel() {
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from("system_settings" as any).select("*").eq("id", true).maybeSingle();
-      setS(data || { site_name: "AcadLink", tagline: "", reels_enabled: true, voice_notes_enabled: true, live_events_enabled: true, registration_open: true, default_post_tag: "discussion", max_post_length: 2000, announcement_banner: "" });
+      setS(data || { site_name: "AcadLink", tagline: "", reels_enabled: true, voice_notes_enabled: true, live_events_enabled: true, registration_open: true, default_post_tag: "discussion", max_post_length: 2000, announcement_banner: "", banner_starts_at: null, banner_ends_at: null, banner_variant: "info" });
       setLoading(false);
     })();
   }, []);
@@ -1339,6 +1339,9 @@ function SystemSettingsPanel() {
       live_events_enabled: s.live_events_enabled, registration_open: s.registration_open,
       default_post_tag: s.default_post_tag, max_post_length: s.max_post_length,
       announcement_banner: s.announcement_banner,
+      banner_starts_at: s.banner_starts_at || null,
+      banner_ends_at: s.banner_ends_at || null,
+      banner_variant: s.banner_variant || "info",
     }).eq("id", true);
     setSaving(false);
     if (error) toast.error(error.message);
