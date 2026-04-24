@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Send, Paperclip, Image, FileText, Mic, MicOff, Users, X, Play, Pause } from "lucide-react";
+import { ArrowLeft, Send, Paperclip, Mic, Users, X, FileText, Trash2, Smile } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -48,13 +48,22 @@ const CourseChatsPanel = () => {
   const [uploading, setUploading] = useState(false);
   const [members, setMembers] = useState<{ user_id: string; display_name: string | null }[]>([]);
   const [showMembers, setShowMembers] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [canCreateGroup, setCanCreateGroup] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [faculties, setFaculties] = useState<{ id: string; name: string }[]>([]);
   const [departments, setDepartments] = useState<{ id: string; name: string; faculty_id: string }[]>([]);
   const [newGroup, setNewGroup] = useState({ code: "", title: "", faculty_id: "", department_id: "", level: "100", semester: "1st", units: 3 });
+
+  // Hold-to-record state
+  const [recording, setRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [recordCancelled, setRecordCancelled] = useState(false);
+  const recordStartRef = useRef<number>(0);
+  const cancelledRef = useRef(false);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const touchStartXRef = useRef<number | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -71,93 +80,54 @@ const CourseChatsPanel = () => {
       if (!user) return;
       setCurrentUserId(user.id);
 
-      // Check if user is admin/group_admin (can create chat groups)
       const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
       const isAdmin = roles?.some(r => r.role === "admin" || r.role === "group_admin") || false;
       setCanCreateGroup(isAdmin);
 
       const { data: memberships } = await supabase
-        .from("course_members")
-        .select("course_id")
-        .eq("user_id", user.id);
+        .from("course_members").select("course_id").eq("user_id", user.id);
 
       if (!memberships?.length) {
-        // Auto-join: get profile dept+level, find matching courses
         const { data: profile } = await supabase
-          .from("profiles")
-          .select("department, level")
-          .eq("user_id", user.id)
-          .single();
-
+          .from("profiles").select("department, level").eq("user_id", user.id).single();
         if (profile?.department && profile?.level) {
-          const { data: depts } = await supabase
-            .from("departments")
-            .select("id")
-            .eq("name", profile.department);
-
+          const { data: depts } = await supabase.from("departments").select("id").eq("name", profile.department);
           if (depts?.length) {
             const { data: courses } = await supabase
-              .from("courses")
-              .select("id")
-              .eq("department_id", depts[0].id)
-              .eq("level", profile.level);
-
+              .from("courses").select("id").eq("department_id", depts[0].id).eq("level", profile.level);
             if (courses?.length) {
               for (const c of courses) {
                 await supabase.from("course_members").upsert(
-                  { course_id: c.id, user_id: user.id },
-                  { onConflict: "course_id,user_id" }
-                );
+                  { course_id: c.id, user_id: user.id }, { onConflict: "course_id,user_id" });
               }
             }
           }
         }
       }
 
-      // Re-fetch memberships (with last_seen_at for unread counts)
       const { data: myMemberships } = await supabase
-        .from("course_members")
-        .select("course_id, last_seen_at")
-        .eq("user_id", user.id);
+        .from("course_members").select("course_id, last_seen_at").eq("user_id", user.id);
 
-      if (!myMemberships?.length) {
-        setLoading(false);
-        return;
-      }
+      if (!myMemberships?.length) { setLoading(false); return; }
 
       const courseIds = myMemberships.map(m => m.course_id);
       const lastSeenMap: Record<string, string> = {};
       myMemberships.forEach(m => { lastSeenMap[m.course_id] = m.last_seen_at; });
 
       const { data: courses } = await supabase
-        .from("courses")
-        .select("id, code, title, level, department_id, display_name, avatar_url, scope")
-        .in("id", courseIds);
-
-      if (!courses) {
-        setLoading(false);
-        return;
-      }
+        .from("courses").select("id, code, title, level, department_id, display_name, avatar_url, scope").in("id", courseIds);
+      if (!courses) { setLoading(false); return; }
 
       const deptIds = courses.map(c => c.department_id).filter((x): x is string => !!x);
       const { data: depts } = deptIds.length
-        ? await supabase.from("departments").select("id, name").in("id", deptIds)
-        : { data: [] };
-
+        ? await supabase.from("departments").select("id, name").in("id", deptIds) : { data: [] };
       const deptMap = Object.fromEntries((depts || []).map(d => [d.id, d.name]));
 
-      // Get member counts
       const { data: allMembers } = await supabase
-        .from("course_members")
-        .select("course_id")
-        .in("course_id", courseIds);
-
+        .from("course_members").select("course_id").in("course_id", courseIds);
       const countMap: Record<string, number> = {};
-      (allMembers || []).forEach(m => {
-        countMap[m.course_id] = (countMap[m.course_id] || 0) + 1;
-      });
+      (allMembers || []).forEach(m => { countMap[m.course_id] = (countMap[m.course_id] || 0) + 1; });
 
-      // Fetch recent messages per course (limit 500 covers last + unread counting)
       const { data: recentMsgs } = await supabase
         .from("chat_messages")
         .select("course_id, user_id, content, message_type, created_at")
@@ -176,7 +146,6 @@ const CourseChatsPanel = () => {
           else if (m.message_type === "document") preview = "📎 " + (m.content || "Document");
           lastMsgMap[m.course_id] = { text: preview, at: m.created_at };
         }
-        // Count unread: messages newer than last_seen_at, not authored by current user
         const seen = lastSeenMap[m.course_id];
         if (m.user_id !== user.id && (!seen || m.created_at > seen)) {
           unreadMap[m.course_id] = (unreadMap[m.course_id] || 0) + 1;
@@ -184,21 +153,14 @@ const CourseChatsPanel = () => {
       });
 
       const groupList: CourseGroup[] = courses.map(c => ({
-        id: c.id,
-        code: c.code,
-        title: c.display_name || c.title,
-        display_name: c.display_name,
-        avatar_url: c.avatar_url,
-        scope: c.scope || "level",
+        id: c.id, code: c.code, title: c.display_name || c.title,
+        display_name: c.display_name, avatar_url: c.avatar_url, scope: c.scope || "level",
         department_name: c.department_id ? (deptMap[c.department_id] || "Unknown") : "",
-        level: c.level,
-        member_count: countMap[c.id] || 0,
-        last_message: lastMsgMap[c.id]?.text,
-        last_message_at: lastMsgMap[c.id]?.at,
+        level: c.level, member_count: countMap[c.id] || 0,
+        last_message: lastMsgMap[c.id]?.text, last_message_at: lastMsgMap[c.id]?.at,
         unread_count: unreadMap[c.id] || 0,
       }));
 
-      // Sort: groups with messages first, by recency; then the rest alphabetically
       groupList.sort((a, b) => {
         if (a.last_message_at && b.last_message_at) return b.last_message_at.localeCompare(a.last_message_at);
         if (a.last_message_at) return -1;
@@ -209,7 +171,6 @@ const CourseChatsPanel = () => {
       setGroups(groupList);
       setLoading(false);
     };
-
     loadGroups();
   }, []);
 
@@ -219,26 +180,15 @@ const CourseChatsPanel = () => {
 
     const loadMessages = async () => {
       const { data } = await supabase
-        .from("chat_messages")
-        .select("*")
-        .eq("course_id", activeCourse.id)
-        .order("created_at", { ascending: true })
-        .limit(200);
+        .from("chat_messages").select("*").eq("course_id", activeCourse.id)
+        .order("created_at", { ascending: true }).limit(200);
 
       if (data?.length) {
         const userIds = [...new Set(data.map(m => m.user_id))];
         const { data: profiles } = await supabase
-          .from("profiles")
-          .select("user_id, display_name, avatar_url")
-          .in("user_id", userIds);
-
-        const profileMap = Object.fromEntries(
-          (profiles || []).map(p => [p.user_id, p])
-        );
-
-        setMessages(
-          data.map(m => ({ ...m, profile: profileMap[m.user_id] || null }))
-        );
+          .from("profiles").select("user_id, display_name, avatar_url").in("user_id", userIds);
+        const profileMap = Object.fromEntries((profiles || []).map(p => [p.user_id, p]));
+        setMessages(data.map(m => ({ ...m, profile: profileMap[m.user_id] || null })));
       } else {
         setMessages([]);
       }
@@ -247,78 +197,50 @@ const CourseChatsPanel = () => {
 
     loadMessages();
 
-    // Mark this group as seen (for unread badge)
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      await supabase
-        .from("course_members")
-        .update({ last_seen_at: new Date().toISOString() })
-        .eq("user_id", user.id)
-        .eq("course_id", activeCourse.id);
+      await supabase.from("course_members").update({ last_seen_at: new Date().toISOString() })
+        .eq("user_id", user.id).eq("course_id", activeCourse.id);
       setGroups(prev => prev.map(g => g.id === activeCourse.id ? { ...g, unread_count: 0 } : g));
     })();
 
-    // Load members
     const loadMembers = async () => {
       const { data: mems } = await supabase
-        .from("course_members")
-        .select("user_id")
-        .eq("course_id", activeCourse.id);
-
+        .from("course_members").select("user_id").eq("course_id", activeCourse.id);
       if (mems?.length) {
         const { data: profiles } = await supabase
-          .from("profiles")
-          .select("user_id, display_name")
-          .in("user_id", mems.map(m => m.user_id));
+          .from("profiles").select("user_id, display_name").in("user_id", mems.map(m => m.user_id));
         setMembers(profiles || []);
       }
     };
     loadMembers();
 
-    // Real-time subscription
     const channel = supabase
       .channel(`chat-${activeCourse.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "chat_messages",
-          filter: `course_id=eq.${activeCourse.id}`,
-        },
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "chat_messages", filter: `course_id=eq.${activeCourse.id}` },
         async (payload) => {
           const msg = payload.new as ChatMessage;
           const { data: profile } = await supabase
-            .from("profiles")
-            .select("user_id, display_name, avatar_url")
-            .eq("user_id", msg.user_id)
-            .single();
+            .from("profiles").select("user_id, display_name, avatar_url").eq("user_id", msg.user_id).single();
           msg.profile = profile || undefined;
           setMessages(prev => [...prev, msg]);
           setTimeout(scrollToBottom, 50);
         }
-      )
-      .subscribe();
+      ).subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [activeCourse, scrollToBottom]);
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !activeCourse || sending) return;
     setSending(true);
     const { error } = await supabase.from("chat_messages").insert({
-      course_id: activeCourse.id,
-      user_id: currentUserId,
-      content: newMessage.trim(),
-      message_type: "text",
-      reply_to: replyTo?.id || null,
+      course_id: activeCourse.id, user_id: currentUserId,
+      content: newMessage.trim(), message_type: "text", reply_to: replyTo?.id || null,
     });
-    if (error) {
-      toast.error(error.message);
-    }
+    if (error) toast.error(error.message);
     setNewMessage("");
     setReplyTo(null);
     setSending(false);
@@ -327,81 +249,86 @@ const CourseChatsPanel = () => {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeCourse) return;
-
-    if (file.size > 20 * 1024 * 1024) {
-      toast.error("File too large (max 20MB)");
-      return;
-    }
+    if (file.size > 20 * 1024 * 1024) { toast.error("File too large (max 20MB)"); return; }
 
     setUploading(true);
     const ext = file.name.split(".").pop();
     const path = `${activeCourse.id}/${Date.now()}.${ext}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("chat-files")
-      .upload(path, file);
-
-    if (uploadError) {
-      toast.error(uploadError.message);
-      setUploading(false);
-      return;
-    }
+    const { error: uploadError } = await supabase.storage.from("chat-files").upload(path, file);
+    if (uploadError) { toast.error(uploadError.message); setUploading(false); return; }
 
     const { data: urlData } = supabase.storage.from("chat-files").getPublicUrl(path);
-
     let msgType = "document";
     if (file.type.startsWith("image/")) msgType = "image";
     else if (file.type.startsWith("video/")) msgType = "video";
     else if (file.type.startsWith("audio/")) msgType = "audio";
 
     await supabase.from("chat_messages").insert({
-      course_id: activeCourse.id,
-      user_id: currentUserId,
-      content: file.name,
-      message_type: msgType,
-      file_url: urlData.publicUrl,
-      file_name: file.name,
+      course_id: activeCourse.id, user_id: currentUserId,
+      content: file.name, message_type: msgType,
+      file_url: urlData.publicUrl, file_name: file.name,
     });
-
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  // ===== Hold-to-record voice notes =====
   const startRecording = async () => {
+    if (recording) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       audioChunksRef.current = [];
-      recorder.ondataavailable = (e) => audioChunksRef.current.push(e.data);
+      cancelledRef.current = false;
+      setRecordCancelled(false);
+
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       recorder.onstop = async () => {
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         stream.getTracks().forEach(t => t.stop());
+        const wasCancelled = cancelledRef.current;
+        const elapsed = (Date.now() - recordStartRef.current) / 1000;
+        if (wasCancelled || elapsed < 0.5 || !activeCourse) return;
 
-        if (!activeCourse) return;
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         const path = `${activeCourse.id}/voice_${Date.now()}.webm`;
-        await supabase.storage.from("chat-files").upload(path, blob);
+        const { error: upErr } = await supabase.storage.from("chat-files").upload(path, blob, { contentType: "audio/webm" });
+        if (upErr) { toast.error(upErr.message); return; }
         const { data: urlData } = supabase.storage.from("chat-files").getPublicUrl(path);
-
         await supabase.from("chat_messages").insert({
-          course_id: activeCourse.id,
-          user_id: currentUserId,
-          content: "Voice note",
+          course_id: activeCourse.id, user_id: currentUserId,
+          content: `Voice note · ${Math.round(elapsed)}s`,
           message_type: "audio",
-          file_url: urlData.publicUrl,
-          file_name: "voice_note.webm",
+          file_url: urlData.publicUrl, file_name: "voice_note.webm",
         });
       };
+
       recorder.start();
       mediaRecorderRef.current = recorder;
-      setIsRecording(true);
+      recordStartRef.current = Date.now();
+      setRecordSeconds(0);
+      setRecording(true);
+      recordTimerRef.current = setInterval(() => {
+        setRecordSeconds(Math.floor((Date.now() - recordStartRef.current) / 1000));
+      }, 250);
     } catch {
       toast.error("Microphone access denied");
     }
   };
 
-  const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    setIsRecording(false);
+  const stopRecording = (cancel = false) => {
+    if (!recording) return;
+    cancelledRef.current = cancel;
+    setRecordCancelled(cancel);
+    if (recordTimerRef.current) { clearInterval(recordTimerRef.current); recordTimerRef.current = null; }
+    try { mediaRecorderRef.current?.stop(); } catch { /* noop */ }
+    setRecording(false);
+    if (cancel) toast("Recording cancelled");
+  };
+
+  const handleMicTouchMove = (e: React.TouchEvent) => {
+    if (!recording || touchStartXRef.current === null) return;
+    const dx = e.touches[0].clientX - touchStartXRef.current;
+    if (dx < -90) stopRecording(true);
   };
 
   const openCreateForm = async () => {
@@ -437,26 +364,30 @@ const CourseChatsPanel = () => {
   if (!activeCourse) {
     const filteredDepts = newGroup.faculty_id ? departments.filter(d => d.faculty_id === newGroup.faculty_id) : departments;
     return (
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-syne text-lg font-bold">💬 Course Group Chats</h2>
+      <div className="bg-card rounded-2xl overflow-hidden border border-border">
+        {/* WhatsApp-style green header */}
+        <div className="bg-[hsl(var(--chat-header))] text-white px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Users className="w-5 h-5" />
+            <h2 className="font-bold text-base">Course Groups</h2>
+          </div>
           {canCreateGroup && (
-            <Button size="sm" onClick={openCreateForm} className="gap-1 h-8 text-xs">
-              <Users className="w-3 h-3" /> New Group
-            </Button>
+            <button onClick={openCreateForm} className="text-xs bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-full font-semibold border-none cursor-pointer text-white">
+              + New
+            </button>
           )}
         </div>
 
         {showCreate && (
-          <div className="content-card mb-3 space-y-2">
+          <div className="p-3 border-b border-border space-y-2 bg-muted/30">
             <div className="text-xs font-semibold mb-1">Create Course Group Chat</div>
             <select value={newGroup.faculty_id} onChange={e => setNewGroup({ ...newGroup, faculty_id: e.target.value, department_id: "" })}
-              className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+              className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm">
               <option value="">Select Faculty</option>
               {faculties.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
             <select value={newGroup.department_id} onChange={e => setNewGroup({ ...newGroup, department_id: e.target.value })}
-              className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm" disabled={!newGroup.faculty_id}>
+              className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" disabled={!newGroup.faculty_id}>
               <option value="">Select Department</option>
               {filteredDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
@@ -466,11 +397,11 @@ const CourseChatsPanel = () => {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <select value={newGroup.level} onChange={e => setNewGroup({ ...newGroup, level: e.target.value })}
-                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm">
                 {["100", "200", "300", "400", "500"].map(l => <option key={l} value={l}>{l} Level</option>)}
               </select>
               <select value={newGroup.semester} onChange={e => setNewGroup({ ...newGroup, semester: e.target.value })}
-                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm">
                 <option value="1st">1st Semester</option>
                 <option value="2nd">2nd Semester</option>
               </select>
@@ -487,12 +418,12 @@ const CourseChatsPanel = () => {
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : groups.length === 0 ? (
-          <div className="text-center py-10 text-muted-foreground text-sm">
+          <div className="text-center py-10 px-6 text-muted-foreground text-sm">
             <p>No course groups yet.</p>
-            <p className="mt-1 text-xs">Groups are auto-joined based on your department & level. Admins can create new ones.</p>
+            <p className="mt-1 text-xs">Groups are auto-joined based on your department & level.</p>
           </div>
         ) : (
-          <div className="space-y-1">
+          <div className="divide-y divide-border">
             {groups.map(g => {
               const isUni = g.scope === "university";
               const isFac = g.scope === "faculty";
@@ -503,22 +434,16 @@ const CourseChatsPanel = () => {
                 : `${g.member_count} member${g.member_count === 1 ? "" : "s"} · tap to start chatting`;
               const ts = g.last_message_at ? format(new Date(g.last_message_at), "HH:mm") : "";
               return (
-                <button
-                  key={g.id}
-                  onClick={() => setActiveCourse(g)}
-                  className="w-full bg-card hover:bg-accent/50 active:bg-accent rounded-xl p-3 flex items-center gap-3 transition-colors text-left border border-transparent hover:border-border"
-                >
+                <button key={g.id} onClick={() => setActiveCourse(g)}
+                  className="w-full hover:bg-accent/40 active:bg-accent px-4 py-3 flex items-center gap-3 transition-colors text-left bg-transparent border-none cursor-pointer">
                   {g.avatar_url ? (
-                    <img src={g.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover shrink-0 shadow-sm" />
+                    <img src={g.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover shrink-0" />
                   ) : (
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-[12px] shrink-0 shadow-sm ${
-                      isUni
-                        ? "bg-gradient-to-br from-accent to-primary text-primary-foreground"
-                        : isFac
-                          ? "bg-gradient-to-br from-primary/80 to-accent text-primary-foreground"
-                          : isGeneral
-                            ? "bg-gradient-to-br from-primary to-primary/70 text-primary-foreground"
-                            : "bg-gradient-to-br from-secondary to-muted text-foreground"
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-[12px] shrink-0 text-white ${
+                      isUni ? "bg-gradient-to-br from-emerald-500 to-emerald-700"
+                        : isFac ? "bg-gradient-to-br from-teal-500 to-teal-700"
+                          : isGeneral ? "bg-gradient-to-br from-[hsl(var(--chat-header))] to-emerald-700"
+                            : "bg-gradient-to-br from-emerald-600 to-green-700"
                     }`}>
                       {initials}
                     </div>
@@ -526,14 +451,12 @@ const CourseChatsPanel = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-0.5">
                       <div className={`text-[14px] truncate text-foreground ${g.unread_count > 0 ? "font-bold" : "font-semibold"}`}>{g.title}</div>
-                      {ts && (
-                        <span className={`text-[10px] shrink-0 ${g.unread_count > 0 ? "text-primary font-semibold" : "text-muted-foreground"}`}>{ts}</span>
-                      )}
+                      {ts && <span className={`text-[10px] shrink-0 ${g.unread_count > 0 ? "text-[hsl(var(--chat-header))] font-semibold" : "text-muted-foreground"}`}>{ts}</span>}
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <div className={`text-[12px] truncate ${g.unread_count > 0 ? "text-foreground font-medium" : "text-muted-foreground"}`}>{subtitle}</div>
                       {g.unread_count > 0 ? (
-                        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shrink-0">
+                        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-[hsl(var(--chat-header))] text-white text-[10px] font-bold flex items-center justify-center shrink-0">
                           {g.unread_count > 99 ? "99+" : g.unread_count}
                         </span>
                       ) : (
@@ -566,21 +489,19 @@ const CourseChatsPanel = () => {
           </div>
         );
       case "video":
-        return (
-          <video src={msg.file_url!} controls className="max-w-[260px] rounded-lg" />
-        );
+        return <video src={msg.file_url!} controls className="max-w-[260px] rounded-lg" />;
       case "audio":
         return (
-          <div className="flex items-center gap-2">
-            <Mic className="w-4 h-4 text-primary" />
-            <audio src={msg.file_url!} controls className="h-8" />
+          <div className="flex items-center gap-2 min-w-[200px]">
+            <Mic className="w-4 h-4 text-[hsl(var(--chat-header))]" />
+            <audio src={msg.file_url!} controls className="h-8 flex-1" />
           </div>
         );
       case "document":
         return (
           <a href={msg.file_url!} target="_blank" rel="noreferrer"
-            className="flex items-center gap-2 bg-background/50 rounded-lg px-3 py-2 hover:bg-background/80 transition">
-            <FileText className="w-5 h-5 text-primary" />
+            className="flex items-center gap-2 bg-background/60 rounded-lg px-3 py-2 hover:bg-background transition no-underline text-foreground">
+            <FileText className="w-5 h-5 text-[hsl(var(--chat-header))]" />
             <div className="min-w-0">
               <div className="text-[12px] font-medium truncate">{msg.file_name || "Document"}</div>
               <div className="text-[10px] text-muted-foreground">Tap to download</div>
@@ -588,24 +509,28 @@ const CourseChatsPanel = () => {
           </a>
         );
       default:
-        return <p className="text-[13px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>;
+        return <p className="text-[13px] leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>;
     }
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-80px)]">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-3 py-2.5 bg-card border-b border-border rounded-t-xl">
-        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => setActiveCourse(null)}>
+    <div className="flex flex-col h-[calc(100vh-80px)] rounded-2xl overflow-hidden border border-border bg-card">
+      {/* WhatsApp-style chat header */}
+      <div className="flex items-center gap-3 px-3 py-2.5 bg-[hsl(var(--chat-header))] text-white">
+        <button onClick={() => setActiveCourse(null)} className="bg-transparent border-none text-white cursor-pointer p-1">
           <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold truncate">{activeCourse.code}</div>
-          <div className="text-[11px] text-muted-foreground">{activeCourse.title} · {members.length} members</div>
-        </div>
-        <Button variant="ghost" size="icon" onClick={() => setShowMembers(!showMembers)}>
-          <Users className="w-4 h-4" />
-        </Button>
+        </button>
+        {activeCourse.avatar_url ? (
+          <img src={activeCourse.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover" />
+        ) : (
+          <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-[11px] font-bold">
+            {activeCourse.code.slice(0, 3)}
+          </div>
+        )}
+        <button onClick={() => setShowMembers(!showMembers)} className="flex-1 min-w-0 text-left bg-transparent border-none cursor-pointer text-white">
+          <div className="text-sm font-bold truncate leading-tight">{activeCourse.code}</div>
+          <div className="text-[11px] text-white/80 truncate">{members.length} members · tap for info</div>
+        </button>
       </div>
 
       {/* Members panel */}
@@ -623,8 +548,8 @@ const CourseChatsPanel = () => {
         </div>
       )}
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 px-3 py-2">
+      {/* Messages — WhatsApp doodle background */}
+      <ScrollArea className="flex-1 px-3 py-2 chat-bg">
         {messages.length === 0 && (
           <div className="text-center py-10 text-muted-foreground text-xs">
             No messages yet. Start the conversation! 🎓
@@ -641,7 +566,7 @@ const CourseChatsPanel = () => {
                 <div className="w-7 mr-1.5 flex-shrink-0">
                   {showAvatar ? (
                     <Avatar className="w-7 h-7">
-                      <AvatarFallback className="text-[10px] bg-primary/20 text-primary">
+                      <AvatarFallback className="text-[10px] bg-[hsl(var(--chat-header))]/15 text-[hsl(var(--chat-header))]">
                         {getInitials(msg.profile?.display_name || null)}
                       </AvatarFallback>
                     </Avatar>
@@ -650,25 +575,25 @@ const CourseChatsPanel = () => {
               )}
               <div className={`max-w-[75%] ${isMe ? "items-end" : "items-start"} flex flex-col`}>
                 {showAvatar && !isMe && (
-                  <span className="text-[10px] font-semibold text-primary ml-1 mb-0.5">
+                  <span className="text-[10px] font-semibold text-[hsl(var(--chat-header))] ml-1 mb-0.5">
                     {msg.profile?.display_name || "Student"}
                   </span>
                 )}
                 {repliedMsg && (
-                  <div className="text-[10px] bg-muted/50 border-l-2 border-primary px-2 py-1 rounded mb-0.5 truncate max-w-full">
+                  <div className="text-[10px] bg-muted/60 border-l-2 border-[hsl(var(--chat-header))] px-2 py-1 rounded mb-0.5 truncate max-w-full">
                     {repliedMsg.content?.slice(0, 60)}
                   </div>
                 )}
                 <div
-                  className={`px-3 py-2 rounded-2xl cursor-pointer ${
+                  className={`px-3 py-2 rounded-2xl cursor-pointer shadow-sm ${
                     isMe
-                      ? "bg-primary text-primary-foreground rounded-br-md"
-                      : "bg-card border border-border rounded-bl-md"
+                      ? "bg-[hsl(var(--chat-bubble-out))] text-foreground rounded-br-md"
+                      : "bg-[hsl(var(--chat-bubble-in))] text-foreground rounded-bl-md"
                   }`}
                   onClick={() => setReplyTo(msg)}
                 >
                   {renderMessageContent(msg)}
-                  <div className={`text-[9px] mt-1 ${isMe ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                  <div className="text-[9px] mt-1 text-muted-foreground text-right">
                     {format(new Date(msg.created_at), "h:mm a")}
                   </div>
                 </div>
@@ -683,7 +608,7 @@ const CourseChatsPanel = () => {
       {replyTo && (
         <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 border-t border-border">
           <div className="flex-1 text-[11px] truncate">
-            <span className="font-semibold text-primary">Replying to {replyTo.profile?.display_name || "message"}</span>
+            <span className="font-semibold text-[hsl(var(--chat-header))]">Replying to {replyTo.profile?.display_name || "message"}</span>
             <span className="text-muted-foreground ml-1">{replyTo.content?.slice(0, 50)}</span>
           </div>
           <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setReplyTo(null)}>
@@ -692,35 +617,67 @@ const CourseChatsPanel = () => {
         </div>
       )}
 
+      {/* Recording overlay */}
+      {recording && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-[hsl(var(--chat-header))]/10 border-t border-border">
+          <span className="w-2.5 h-2.5 rounded-full bg-destructive animate-pulse" />
+          <div className="flex-1">
+            <div className="text-[13px] font-semibold text-foreground">
+              Recording… {String(Math.floor(recordSeconds / 60)).padStart(2, "0")}:{String(recordSeconds % 60).padStart(2, "0")}
+            </div>
+            <div className="text-[10px] text-muted-foreground">
+              {recordCancelled ? "Cancelled" : "← Slide left to cancel · release mic to send"}
+            </div>
+          </div>
+          <button onClick={() => stopRecording(true)} className="text-destructive bg-transparent border-none cursor-pointer p-2">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Input bar */}
-      <div className="flex items-center gap-2 px-3 py-2.5 bg-card border-t border-border rounded-b-xl">
+      <div className="flex items-center gap-2 px-3 py-2.5 bg-card border-t border-border">
         <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden"
           accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" />
-        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-          <Paperclip className="w-4 h-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={`shrink-0 ${isRecording ? "text-destructive animate-pulse" : ""}`}
-          onMouseDown={startRecording}
-          onMouseUp={stopRecording}
-          onTouchStart={startRecording}
-          onTouchEnd={stopRecording}
-        >
-          {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-        </Button>
-        <Input
-          value={newMessage}
-          onChange={e => setNewMessage(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
-          placeholder="Type a message..."
-          className="flex-1 h-9 text-[13px] bg-muted/50 border-none"
-          disabled={uploading}
-        />
-        <Button size="icon" className="shrink-0 h-9 w-9" onClick={sendMessage} disabled={sending || !newMessage.trim()}>
-          <Send className="w-4 h-4" />
-        </Button>
+
+        <div className="flex-1 flex items-center gap-1 bg-muted/60 rounded-full pl-3 pr-1 h-10">
+          <Smile className="w-4 h-4 text-muted-foreground shrink-0" />
+          <Input
+            value={newMessage}
+            onChange={e => setNewMessage(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
+            placeholder="Type a message"
+            className="flex-1 h-9 text-[13px] bg-transparent border-none focus-visible:ring-0 px-2"
+            disabled={uploading || recording}
+          />
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading || recording}
+            className="p-2 text-muted-foreground hover:text-foreground bg-transparent border-none cursor-pointer disabled:opacity-50">
+            <Paperclip className="w-4 h-4" />
+          </button>
+        </div>
+
+        {newMessage.trim() ? (
+          <button onClick={sendMessage} disabled={sending}
+            className="shrink-0 h-10 w-10 rounded-full bg-[hsl(var(--chat-header))] text-white flex items-center justify-center border-none cursor-pointer disabled:opacity-50 active:scale-95 transition">
+            <Send className="w-4 h-4" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); startRecording(); }}
+            onMouseUp={() => stopRecording(false)}
+            onMouseLeave={() => recording && stopRecording(false)}
+            onTouchStart={(e) => { touchStartXRef.current = e.touches[0].clientX; startRecording(); }}
+            onTouchMove={handleMicTouchMove}
+            onTouchEnd={() => { touchStartXRef.current = null; stopRecording(false); }}
+            className={`shrink-0 h-10 w-10 rounded-full text-white flex items-center justify-center border-none cursor-pointer active:scale-95 transition ${
+              recording ? "bg-destructive scale-110" : "bg-[hsl(var(--chat-header))]"
+            }`}
+            aria-label="Hold to record voice note"
+          >
+            <Mic className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </div>
   );

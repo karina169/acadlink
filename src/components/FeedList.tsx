@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { MessageCircle, ChevronDown, ChevronUp, Send, Trash2, Bookmark, BookmarkCheck, FileText, Download } from "lucide-react";
+import { MessageCircle, Send, Trash2, Bookmark, BookmarkCheck, FileText, Download, Rocket } from "lucide-react";
 import VerifiedBadge from "./VerifiedBadge";
 import CampusReels from "./CampusReels";
 
@@ -11,7 +11,8 @@ interface PostData {
   content: string;
   tag: string;
   created_at: string;
-  profile?: { display_name: string | null; department: string | null; level: string | null; avatar_url: string | null; verified: boolean | null } | null;
+  boosted_until: string | null;
+  profile?: { display_name: string | null; department: string | null; level: string | null; avatar_url: string | null; verified: boolean | null; boosted_until: string | null } | null;
   attachments: { id: string; file_url: string; file_name: string; file_size: string | null; file_type: string | null }[];
   like_count: number;
   comment_count: number;
@@ -122,6 +123,8 @@ const FeedPost = ({ post, userId }: { post: PostData; userId: string }) => {
   const [showComments, setShowComments] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
   const tag = tagStyles[post.tag] || tagStyles.discussion;
+  const isPostBoosted = !!post.boosted_until && new Date(post.boosted_until) > new Date();
+  const isAuthorBoosted = !!post.profile?.boosted_until && new Date(post.profile.boosted_until) > new Date();
 
   const handleLike = async () => {
     if (liked) {
@@ -136,12 +139,18 @@ const FeedPost = ({ post, userId }: { post: PostData; userId: string }) => {
   };
 
   return (
-    <div className="content-card mb-3">
+    <div className={`content-card mb-3 relative ${isPostBoosted ? "ring-2 ring-[hsl(var(--boost))]/40 shadow-md" : ""}`}>
+      {isPostBoosted && (
+        <div className="absolute -top-2 left-3 boost-badge">
+          <Rocket className="w-2.5 h-2.5" /> Boosted
+        </div>
+      )}
       <div className="flex gap-2.5 items-center mb-3">
         {post.profile?.avatar_url ? (
-          <img src={post.profile.avatar_url} alt={post.profile.display_name || "User"} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+          <img src={post.profile.avatar_url} alt={post.profile.display_name || "User"}
+            className={`w-9 h-9 rounded-full object-cover flex-shrink-0 ${isAuthorBoosted ? "boost-ring" : ""}`} />
         ) : (
-          <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-sm flex-shrink-0">
+          <div className={`w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-sm flex-shrink-0 ${isAuthorBoosted ? "boost-ring" : ""}`}>
             {getInitials(post.profile?.display_name)}
           </div>
         )}
@@ -149,6 +158,7 @@ const FeedPost = ({ post, userId }: { post: PostData; userId: string }) => {
           <div className="font-semibold text-sm flex items-center gap-1">
             <span className="truncate">{post.profile?.display_name || "User"}</span>
             <VerifiedBadge verified={post.profile?.verified} />
+            {isAuthorBoosted && <span className="boost-badge ml-1"><Rocket className="w-2.5 h-2.5" />VIRAL</span>}
           </div>
           <div className="text-[11px] text-muted-foreground">
             {post.profile?.department || ""}{post.profile?.level ? ` · ${post.profile.level} Level` : ""} · {timeAgo(post.created_at)}
@@ -235,7 +245,7 @@ const FeedList = ({ refreshKey }: { refreshKey?: number }) => {
     if (!user) return;
     setUserId(user.id);
 
-    let query = supabase.from("posts").select("id, user_id, content, tag, created_at").neq("tag", "status").order("created_at", { ascending: false }).limit(50);
+    let query = supabase.from("posts").select("id, user_id, content, tag, created_at, boosted_until").neq("tag", "status").order("created_at", { ascending: false }).limit(50);
     if (filter === "live") query = query.eq("tag", "live");
     else if (filter === "creels") query = query.eq("tag", "creels");
 
@@ -246,7 +256,7 @@ const FeedList = ({ refreshKey }: { refreshKey?: number }) => {
     const userIds = [...new Set(postsData.map(p => p.user_id))];
 
     const [profilesRes, attachmentsRes, likesRes, commentsRes, userLikesRes] = await Promise.all([
-      supabase.from("profiles").select("user_id, display_name, department, level, avatar_url, verified").in("user_id", userIds),
+      supabase.from("profiles").select("user_id, display_name, department, level, avatar_url, verified, boosted_until").in("user_id", userIds),
       supabase.from("post_attachments").select("id, post_id, file_url, file_name, file_size, file_type").in("post_id", postIds),
       supabase.from("post_likes").select("post_id").in("post_id", postIds),
       supabase.from("comments").select("post_id").in("post_id", postIds),
@@ -265,14 +275,27 @@ const FeedList = ({ refreshKey }: { refreshKey?: number }) => {
     commentsRes.data?.forEach(c => commentCountMap.set(c.post_id, (commentCountMap.get(c.post_id) || 0) + 1));
     const userLikedSet = new Set(userLikesRes.data?.map(l => l.post_id) || []);
 
-    setPosts(postsData.map(p => ({
+    const now = Date.now();
+    const enriched: PostData[] = postsData.map(p => ({
       ...p,
-      profile: profileMap.get(p.user_id),
+      boosted_until: (p as any).boosted_until ?? null,
+      profile: profileMap.get(p.user_id) as PostData["profile"],
       attachments: attachMap.get(p.id) || [],
       like_count: likeCountMap.get(p.id) || 0,
       comment_count: commentCountMap.get(p.id) || 0,
       user_liked: userLikedSet.has(p.id),
-    })));
+    }));
+
+    // Boosted posts (or by boosted authors) sort to the top
+    enriched.sort((a, b) => {
+      const aBoost = (a.boosted_until && new Date(a.boosted_until).getTime() > now) || (a.profile?.boosted_until && new Date(a.profile.boosted_until).getTime() > now);
+      const bBoost = (b.boosted_until && new Date(b.boosted_until).getTime() > now) || (b.profile?.boosted_until && new Date(b.profile.boosted_until).getTime() > now);
+      if (aBoost && !bBoost) return -1;
+      if (!aBoost && bBoost) return 1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+    setPosts(enriched);
     setLoading(false);
   };
 
