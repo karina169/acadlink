@@ -1122,3 +1122,300 @@ function RolesPanel() {
     </div>
   );
 }
+
+// ============== VERIFY USERS PANEL ==============
+function VerifyUsersPanel() {
+  const [search, setSearch] = useState("");
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const runSearch = useCallback(async () => {
+    setLoading(true);
+    let q = supabase.from("profiles").select("id, user_id, display_name, matric_number, department, level, avatar_url, verified").order("display_name").limit(50);
+    if (search.trim()) {
+      const s = `%${search.trim()}%`;
+      q = q.or(`display_name.ilike.${s},matric_number.ilike.${s},department.ilike.${s}`);
+    }
+    const { data } = await q;
+    setUsers(data || []);
+    setLoading(false);
+  }, [search]);
+
+  useEffect(() => { runSearch(); }, [runSearch]);
+
+  const toggleVerify = async (u: any) => {
+    const { error } = await supabase.from("profiles").update({ verified: !u.verified }).eq("user_id", u.user_id);
+    if (error) return toast.error(error.message);
+    toast.success(u.verified ? "Verification removed" : "Account verified ✓");
+    setUsers(prev => prev.map(x => x.user_id === u.user_id ? { ...x, verified: !x.verified } : x));
+  };
+
+  return (
+    <div>
+      <div className="mb-4">
+        <h1 className="text-xl font-bold flex items-center gap-2"><BadgeCheck className="w-5 h-5 text-[#1d9bf0]" /> Verify Users</h1>
+        <p className="text-sm text-muted-foreground">Search by name, matric number or department, then grant the blue verified badge.</p>
+      </div>
+      <div className="relative max-w-md mb-4">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input placeholder="Search students by name, matric, department…" value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-10 text-sm" />
+      </div>
+      {loading ? (
+        <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+      ) : (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {users.map(u => (
+            <Card key={u.id}>
+              <CardContent className="pt-4 pb-4 px-4 flex items-center gap-3">
+                {u.avatar_url ? (
+                  <img src={u.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold">
+                    {(u.display_name || "?").slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold flex items-center gap-1 truncate">
+                    {u.display_name || "No name"}
+                    {u.verified && <Check className="w-3.5 h-3.5 text-[#1d9bf0]" />}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground truncate">
+                    {u.matric_number || "—"} · {u.department || "—"} · {u.level || "—"}
+                  </div>
+                </div>
+                <Button size="sm" variant={u.verified ? "outline" : "default"} className="h-8 text-[11px] gap-1 shrink-0" onClick={() => toggleVerify(u)}>
+                  {u.verified ? <><X className="w-3 h-3" />Unverify</> : <><BadgeCheck className="w-3 h-3" />Verify</>}
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+          {users.length === 0 && <p className="text-center text-sm text-muted-foreground py-8 sm:col-span-2">No matching users.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============== BOOST PANEL (make posts/accounts viral) ==============
+function BoostPanel() {
+  const [tab, setTab] = useState<"posts" | "accounts">("posts");
+  const [items, setItems] = useState<any[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    if (tab === "posts") {
+      let q = supabase.from("posts").select("id, user_id, content, tag, boosted_until, created_at").order("created_at", { ascending: false }).limit(60);
+      if (search.trim()) q = q.ilike("content", `%${search.trim()}%`);
+      const { data } = await q;
+      setItems(data || []);
+    } else {
+      let q = supabase.from("profiles").select("id, user_id, display_name, matric_number, department, level, avatar_url, verified, boosted_until").order("display_name").limit(60);
+      if (search.trim()) {
+        const s = `%${search.trim()}%`;
+        q = q.or(`display_name.ilike.${s},matric_number.ilike.${s}`);
+      }
+      const { data } = await q;
+      setItems(data || []);
+    }
+    setLoading(false);
+  }, [tab, search]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const setBoost = async (item: any, days: number | null) => {
+    const table = tab === "posts" ? "posts" : "profiles";
+    const id = tab === "posts" ? item.id : item.user_id;
+    const filter = tab === "posts" ? "id" : "user_id";
+    const value = days === null ? null : new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+    const { error } = await (supabase.from(table) as any).update({ boosted_until: value }).eq(filter, id);
+    if (error) return toast.error(error.message);
+    toast.success(days === null ? "Boost removed" : `Boosted for ${days} day${days === 1 ? "" : "s"} 🚀`);
+    load();
+  };
+
+  return (
+    <div>
+      <div className="mb-4">
+        <h1 className="text-xl font-bold flex items-center gap-2"><Rocket className="w-5 h-5 text-[hsl(var(--boost))]" /> Boost / Viral</h1>
+        <p className="text-sm text-muted-foreground">Pin posts to the top of every feed or mark accounts as Viral. Boosted items show a fire badge to all users.</p>
+      </div>
+
+      <div className="flex gap-2 mb-4">
+        <button onClick={() => setTab("posts")} className={`filter-pill text-xs ${tab === "posts" ? "filter-pill-active" : ""}`}>Boost Posts</button>
+        <button onClick={() => setTab("accounts")} className={`filter-pill text-xs ${tab === "accounts" ? "filter-pill-active" : ""}`}>Boost Accounts</button>
+      </div>
+
+      <div className="relative max-w-md mb-4">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input placeholder={tab === "posts" ? "Search posts…" : "Search accounts…"} value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-10 text-sm" />
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+      ) : (
+        <div className="space-y-2">
+          {items.map(it => {
+            const isBoosted = it.boosted_until && new Date(it.boosted_until) > new Date();
+            return (
+              <Card key={it.id} className={isBoosted ? "border-[hsl(var(--boost))]/50" : ""}>
+                <CardContent className="pt-4 pb-4 px-4 flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    {tab === "posts" ? (
+                      <>
+                        <p className="text-sm line-clamp-2">{it.content}</p>
+                        <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-2">
+                          <Badge variant="secondary" className="text-[10px]">{it.tag}</Badge>
+                          <span>{new Date(it.created_at).toLocaleDateString()}</span>
+                          {isBoosted && <span className="boost-badge"><Rocket className="w-2.5 h-2.5" />Boosted until {new Date(it.boosted_until).toLocaleDateString()}</span>}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        {it.avatar_url ? (
+                          <img src={it.avatar_url} alt="" className={`w-10 h-10 rounded-full object-cover ${isBoosted ? "boost-ring" : ""}`} />
+                        ) : (
+                          <div className={`w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold ${isBoosted ? "boost-ring" : ""}`}>
+                            {(it.display_name || "?").slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold truncate flex items-center gap-1">
+                            {it.display_name || "No name"}
+                            {it.verified && <Check className="w-3.5 h-3.5 text-[#1d9bf0]" />}
+                            {isBoosted && <span className="boost-badge"><Rocket className="w-2.5 h-2.5" />VIRAL</span>}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground truncate">{it.department || "—"} · {it.level || "—"}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1 shrink-0">
+                    {isBoosted ? (
+                      <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1" onClick={() => setBoost(it, null)}>
+                        <X className="w-3 h-3" />Remove boost
+                      </Button>
+                    ) : (
+                      <>
+                        <Button size="sm" className="h-7 text-[11px] gap-1" onClick={() => setBoost(it, 1)}>
+                          <Rocket className="w-3 h-3" />1 day
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => setBoost(it, 7)}>7 days</Button>
+                        <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => setBoost(it, 30)}>30 days</Button>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+          {items.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">Nothing to show.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============== SYSTEM SETTINGS PANEL ==============
+function SystemSettingsPanel() {
+  const [s, setS] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("system_settings" as any).select("*").eq("id", true).maybeSingle();
+      setS(data || { site_name: "AcadLink", tagline: "", reels_enabled: true, voice_notes_enabled: true, live_events_enabled: true, registration_open: true, default_post_tag: "discussion", max_post_length: 2000, announcement_banner: "" });
+      setLoading(false);
+    })();
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    const { error } = await (supabase.from("system_settings" as any) as any).update({
+      site_name: s.site_name, tagline: s.tagline,
+      reels_enabled: s.reels_enabled, voice_notes_enabled: s.voice_notes_enabled,
+      live_events_enabled: s.live_events_enabled, registration_open: s.registration_open,
+      default_post_tag: s.default_post_tag, max_post_length: s.max_post_length,
+      announcement_banner: s.announcement_banner,
+    }).eq("id", true);
+    setSaving(false);
+    if (error) toast.error(error.message);
+    else toast.success("System settings saved");
+  };
+
+  if (loading || !s) return <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
+
+  return (
+    <div className="max-w-3xl">
+      <div className="mb-6">
+        <h1 className="text-xl font-bold flex items-center gap-2"><SettingsIcon className="w-5 h-5" /> System Settings</h1>
+        <p className="text-sm text-muted-foreground">Global controls for the entire AcadLink platform.</p>
+      </div>
+
+      <Card className="mb-4">
+        <CardHeader><CardTitle className="text-sm">Branding</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold mb-1.5">Site name</label>
+            <Input value={s.site_name || ""} onChange={e => setS({ ...s, site_name: e.target.value })} className="h-9 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1.5">Tagline</label>
+            <Input value={s.tagline || ""} onChange={e => setS({ ...s, tagline: e.target.value })} className="h-9 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1.5">Announcement banner (shown to all users; leave blank to hide)</label>
+            <Textarea rows={2} value={s.announcement_banner || ""} onChange={e => setS({ ...s, announcement_banner: e.target.value })} className="text-sm" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-4">
+        <CardHeader><CardTitle className="text-sm">Feature toggles</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          {[
+            { key: "reels_enabled", label: "Campus Reels", desc: "Allow users to post and watch short videos." },
+            { key: "voice_notes_enabled", label: "Voice notes", desc: "Hold-to-record voice messages in course chats." },
+            { key: "live_events_enabled", label: "Live Events", desc: "Show the Live Event tab in the feed." },
+            { key: "registration_open", label: "Open registration", desc: "When off, new students cannot sign up." },
+          ].map(f => (
+            <div key={f.key} className="flex items-center justify-between gap-3 py-1">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">{f.label}</div>
+                <div className="text-[11px] text-muted-foreground">{f.desc}</div>
+              </div>
+              <Switch checked={!!s[f.key]} onCheckedChange={v => setS({ ...s, [f.key]: v })} />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card className="mb-4">
+        <CardHeader><CardTitle className="text-sm">Posting rules</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold mb-1.5">Default post tag</label>
+            <select value={s.default_post_tag} onChange={e => setS({ ...s, default_post_tag: e.target.value })}
+              className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm">
+              <option value="discussion">Discussion</option>
+              <option value="question">Question</option>
+              <option value="resource">Resource</option>
+              <option value="announcement">Announcement</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1.5">Max post length (characters)</label>
+            <Input type="number" value={s.max_post_length} onChange={e => setS({ ...s, max_post_length: parseInt(e.target.value) || 2000 })} className="h-9 text-sm" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Button onClick={save} disabled={saving} className="gap-1">
+        <Check className="w-4 h-4" />{saving ? "Saving…" : "Save settings"}
+      </Button>
+    </div>
+  );
+}
+
