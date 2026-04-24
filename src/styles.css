@@ -149,4 +149,28 @@
     background: var(--color-primary);
     color: var(--color-primary-foreground);
   }
+  .chat-bg {
+    background-color: hsl(var(--chat-bg));
+    background-image:
+      radial-gradient(circle at 20% 20%, hsl(var(--chat-header) / 0.04) 1px, transparent 1.5px),
+      radial-gradient(circle at 70% 60%, hsl(var(--chat-header) / 0.04) 1px, transparent 1.5px),
+      radial-gradient(circle at 40% 80%, hsl(var(--chat-header) / 0.04) 1px, transparent 1.5px);
+    background-size: 36px 36px, 48px 48px, 64px 64px;
+  }
+  .boost-badge {
+    background: linear-gradient(135deg, hsl(var(--boost)), hsl(35 95% 45%));
+    color: white;
+    font-size: 0.625rem;
+    font-weight: 700;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .boost-ring {
+    box-shadow: 0 0 0 2px hsl(var(--boost)), 0 0 0 4px hsl(var(--boost) / 0.25);
+  }
 }
