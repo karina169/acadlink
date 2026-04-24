@@ -123,6 +123,8 @@ const FeedPost = ({ post, userId }: { post: PostData; userId: string }) => {
   const [showComments, setShowComments] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
   const tag = tagStyles[post.tag] || tagStyles.discussion;
+  const isPostBoosted = !!post.boosted_until && new Date(post.boosted_until) > new Date();
+  const isAuthorBoosted = !!post.profile?.boosted_until && new Date(post.profile.boosted_until) > new Date();
 
   const handleLike = async () => {
     if (liked) {
@@ -137,12 +139,18 @@ const FeedPost = ({ post, userId }: { post: PostData; userId: string }) => {
   };
 
   return (
-    <div className="content-card mb-3">
+    <div className={`content-card mb-3 relative ${isPostBoosted ? "ring-2 ring-[hsl(var(--boost))]/40 shadow-md" : ""}`}>
+      {isPostBoosted && (
+        <div className="absolute -top-2 left-3 boost-badge">
+          <Rocket className="w-2.5 h-2.5" /> Boosted
+        </div>
+      )}
       <div className="flex gap-2.5 items-center mb-3">
         {post.profile?.avatar_url ? (
-          <img src={post.profile.avatar_url} alt={post.profile.display_name || "User"} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+          <img src={post.profile.avatar_url} alt={post.profile.display_name || "User"}
+            className={`w-9 h-9 rounded-full object-cover flex-shrink-0 ${isAuthorBoosted ? "boost-ring" : ""}`} />
         ) : (
-          <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-sm flex-shrink-0">
+          <div className={`w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-sm flex-shrink-0 ${isAuthorBoosted ? "boost-ring" : ""}`}>
             {getInitials(post.profile?.display_name)}
           </div>
         )}
@@ -150,6 +158,7 @@ const FeedPost = ({ post, userId }: { post: PostData; userId: string }) => {
           <div className="font-semibold text-sm flex items-center gap-1">
             <span className="truncate">{post.profile?.display_name || "User"}</span>
             <VerifiedBadge verified={post.profile?.verified} />
+            {isAuthorBoosted && <span className="boost-badge ml-1"><Rocket className="w-2.5 h-2.5" />VIRAL</span>}
           </div>
           <div className="text-[11px] text-muted-foreground">
             {post.profile?.department || ""}{post.profile?.level ? ` · ${post.profile.level} Level` : ""} · {timeAgo(post.created_at)}
