@@ -69,6 +69,13 @@
   --sidebar-accent-foreground: hsl(220 14% 10%);
   --sidebar-border: hsl(220 13% 91%);
   --sidebar-ring: hsl(220 72% 50%);
+
+  /* WhatsApp-style chat tokens, themed to AcadLink primary */
+  --chat-header: 220 72% 38%;
+  --chat-bg: 220 30% 96%;
+  --chat-bubble-in: 0 0% 100%;
+  --chat-bubble-out: 220 80% 92%;
+  --boost: 35 95% 55%;
 }
 
 @layer base {
