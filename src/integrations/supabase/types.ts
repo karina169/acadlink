@@ -641,6 +641,9 @@ export type Database = {
       system_settings: {
         Row: {
           announcement_banner: string | null
+          banner_ends_at: string | null
+          banner_starts_at: string | null
+          banner_variant: string
           default_post_tag: string
           id: boolean
           live_events_enabled: boolean
@@ -654,6 +657,9 @@ export type Database = {
         }
         Insert: {
           announcement_banner?: string | null
+          banner_ends_at?: string | null
+          banner_starts_at?: string | null
+          banner_variant?: string
           default_post_tag?: string
           id?: boolean
           live_events_enabled?: boolean
@@ -667,6 +673,9 @@ export type Database = {
         }
         Update: {
           announcement_banner?: string | null
+          banner_ends_at?: string | null
+          banner_starts_at?: string | null
+          banner_variant?: string
           default_post_tag?: string
           id?: boolean
           live_events_enabled?: boolean
