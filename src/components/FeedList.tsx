@@ -245,7 +245,7 @@ const FeedList = ({ refreshKey }: { refreshKey?: number }) => {
     if (!user) return;
     setUserId(user.id);
 
-    let query = supabase.from("posts").select("id, user_id, content, tag, created_at").neq("tag", "status").order("created_at", { ascending: false }).limit(50);
+    let query = supabase.from("posts").select("id, user_id, content, tag, created_at, boosted_until").neq("tag", "status").order("created_at", { ascending: false }).limit(50);
     if (filter === "live") query = query.eq("tag", "live");
     else if (filter === "creels") query = query.eq("tag", "creels");
 
@@ -256,7 +256,7 @@ const FeedList = ({ refreshKey }: { refreshKey?: number }) => {
     const userIds = [...new Set(postsData.map(p => p.user_id))];
 
     const [profilesRes, attachmentsRes, likesRes, commentsRes, userLikesRes] = await Promise.all([
-      supabase.from("profiles").select("user_id, display_name, department, level, avatar_url, verified").in("user_id", userIds),
+      supabase.from("profiles").select("user_id, display_name, department, level, avatar_url, verified, boosted_until").in("user_id", userIds),
       supabase.from("post_attachments").select("id, post_id, file_url, file_name, file_size, file_type").in("post_id", postIds),
       supabase.from("post_likes").select("post_id").in("post_id", postIds),
       supabase.from("comments").select("post_id").in("post_id", postIds),
@@ -275,14 +275,27 @@ const FeedList = ({ refreshKey }: { refreshKey?: number }) => {
     commentsRes.data?.forEach(c => commentCountMap.set(c.post_id, (commentCountMap.get(c.post_id) || 0) + 1));
     const userLikedSet = new Set(userLikesRes.data?.map(l => l.post_id) || []);
 
-    setPosts(postsData.map(p => ({
+    const now = Date.now();
+    const enriched: PostData[] = postsData.map(p => ({
       ...p,
-      profile: profileMap.get(p.user_id),
+      boosted_until: (p as any).boosted_until ?? null,
+      profile: profileMap.get(p.user_id) as PostData["profile"],
       attachments: attachMap.get(p.id) || [],
       like_count: likeCountMap.get(p.id) || 0,
       comment_count: commentCountMap.get(p.id) || 0,
       user_liked: userLikedSet.has(p.id),
-    })));
+    }));
+
+    // Boosted posts (or by boosted authors) sort to the top
+    enriched.sort((a, b) => {
+      const aBoost = (a.boosted_until && new Date(a.boosted_until).getTime() > now) || (a.profile?.boosted_until && new Date(a.profile.boosted_until).getTime() > now);
+      const bBoost = (b.boosted_until && new Date(b.boosted_until).getTime() > now) || (b.profile?.boosted_until && new Date(b.profile.boosted_until).getTime() > now);
+      if (aBoost && !bBoost) return -1;
+      if (!aBoost && bBoost) return 1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+    setPosts(enriched);
     setLoading(false);
   };
 
