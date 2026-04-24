@@ -1368,12 +1368,10 @@ function SystemSettingsPanel() {
             <label className="block text-xs font-semibold mb-1.5">Tagline</label>
             <Input value={s.tagline || ""} onChange={e => setS({ ...s, tagline: e.target.value })} className="h-9 text-sm" />
           </div>
-          <div>
-            <label className="block text-xs font-semibold mb-1.5">Announcement banner (shown to all users; leave blank to hide)</label>
-            <Textarea rows={2} value={s.announcement_banner || ""} onChange={e => setS({ ...s, announcement_banner: e.target.value })} className="text-sm" />
-          </div>
         </CardContent>
       </Card>
+
+      <AnnouncementBannerEditor s={s} setS={setS} />
 
       <Card className="mb-4">
         <CardHeader><CardTitle className="text-sm">Feature toggles</CardTitle></CardHeader>
