@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { MessageCircle, ChevronDown, ChevronUp, Send, Trash2, Bookmark, BookmarkCheck, FileText, Download } from "lucide-react";
+import { MessageCircle, Send, Trash2, Bookmark, BookmarkCheck, FileText, Download, Rocket } from "lucide-react";
 import VerifiedBadge from "./VerifiedBadge";
 import CampusReels from "./CampusReels";
 
@@ -11,7 +11,8 @@ interface PostData {
   content: string;
   tag: string;
   created_at: string;
-  profile?: { display_name: string | null; department: string | null; level: string | null; avatar_url: string | null; verified: boolean | null } | null;
+  boosted_until: string | null;
+  profile?: { display_name: string | null; department: string | null; level: string | null; avatar_url: string | null; verified: boolean | null; boosted_until: string | null } | null;
   attachments: { id: string; file_url: string; file_name: string; file_size: string | null; file_type: string | null }[];
   like_count: number;
   comment_count: number;
