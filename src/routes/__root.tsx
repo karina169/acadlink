@@ -1,5 +1,6 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { Toaster } from "sonner";
+import AnnouncementBanner from "@/components/AnnouncementBanner";
 
 import appCss from "../styles.css?url";
 
@@ -70,6 +71,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   return (
     <>
+      <AnnouncementBanner />
       <Outlet />
       <Toaster position="top-right" richColors />
     </>
