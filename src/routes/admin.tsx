@@ -1421,3 +1421,131 @@ function SystemSettingsPanel() {
   );
 }
 
+// Helper: convert ISO timestamp <-> value for <input type="datetime-local">
+function isoToLocalInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function localInputToIso(v: string): string | null {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+const BANNER_VARIANTS: { key: string; label: string; className: string }[] = [
+  { key: "info", label: "Info", className: "bg-primary text-primary-foreground" },
+  { key: "warning", label: "Warning", className: "bg-amber-500 text-white" },
+  { key: "success", label: "Success", className: "bg-emerald-500 text-white" },
+  { key: "alert", label: "Alert", className: "bg-destructive text-destructive-foreground" },
+];
+
+function AnnouncementBannerEditor({ s, setS }: { s: any; setS: (v: any) => void }) {
+  const active = isBannerActive(s);
+  const now = Date.now();
+  const startsAt = s.banner_starts_at ? new Date(s.banner_starts_at).getTime() : null;
+  const endsAt = s.banner_ends_at ? new Date(s.banner_ends_at).getTime() : null;
+
+  let status = "Hidden";
+  let statusTone = "bg-muted text-muted-foreground";
+  if (s.announcement_banner?.trim()) {
+    if (startsAt && startsAt > now) { status = `Scheduled — starts ${new Date(startsAt).toLocaleString()}`; statusTone = "bg-amber-500/15 text-amber-700 dark:text-amber-400"; }
+    else if (endsAt && endsAt < now) { status = `Expired ${new Date(endsAt).toLocaleString()}`; statusTone = "bg-muted text-muted-foreground"; }
+    else if (active) { status = endsAt ? `Live — ends ${new Date(endsAt).toLocaleString()}` : "Live — no end date"; statusTone = "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"; }
+  }
+
+  const variant = BANNER_VARIANTS.find(v => v.key === (s.banner_variant || "info")) || BANNER_VARIANTS[0];
+
+  return (
+    <Card className="mb-4">
+      <CardHeader>
+        <CardTitle className="text-sm flex items-center justify-between gap-2">
+          <span>Announcement banner</span>
+          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusTone}`}>{status}</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <label className="block text-xs font-semibold mb-1.5">Message (leave blank to disable)</label>
+          <Textarea
+            rows={2}
+            value={s.announcement_banner || ""}
+            onChange={e => setS({ ...s, announcement_banner: e.target.value })}
+            placeholder="e.g. Server maintenance on Sunday 9 PM. The site may be slow for ~30 minutes."
+            className="text-sm"
+          />
+          <div className="text-[10px] text-muted-foreground mt-1">{(s.announcement_banner || "").length} characters</div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold mb-1.5">Style</label>
+          <div className="flex flex-wrap gap-2">
+            {BANNER_VARIANTS.map(v => (
+              <button
+                key={v.key}
+                type="button"
+                onClick={() => setS({ ...s, banner_variant: v.key })}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-all ${
+                  (s.banner_variant || "info") === v.key
+                    ? "border-primary ring-2 ring-primary/30"
+                    : "border-border hover:border-primary/50"
+                } ${v.className}`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold mb-1.5">Starts at (optional)</label>
+            <Input
+              type="datetime-local"
+              value={isoToLocalInput(s.banner_starts_at)}
+              onChange={e => setS({ ...s, banner_starts_at: localInputToIso(e.target.value) })}
+              className="h-9 text-sm"
+            />
+            <div className="text-[10px] text-muted-foreground mt-1">Leave blank to start immediately.</div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1.5">Ends at (optional)</label>
+            <Input
+              type="datetime-local"
+              value={isoToLocalInput(s.banner_ends_at)}
+              onChange={e => setS({ ...s, banner_ends_at: localInputToIso(e.target.value) })}
+              className="h-9 text-sm"
+            />
+            <div className="text-[10px] text-muted-foreground mt-1">Leave blank to show indefinitely.</div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={() => setS({ ...s, banner_starts_at: new Date().toISOString(), banner_ends_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString() })}>
+            Schedule next 24h
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setS({ ...s, banner_starts_at: new Date().toISOString(), banner_ends_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString() })}>
+            Schedule next 7 days
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setS({ ...s, banner_starts_at: null, banner_ends_at: null })}>
+            Clear schedule
+          </Button>
+        </div>
+
+        <div>
+          <div className="text-xs font-semibold mb-1.5 text-muted-foreground">Live preview</div>
+          {s.announcement_banner?.trim() ? (
+            <div className={`${variant.className} w-full px-3 py-2 flex items-center gap-2 text-sm rounded-md`}>
+              <span className="flex-1 leading-snug">{s.announcement_banner}</span>
+              <X className="w-4 h-4 opacity-70" />
+            </div>
+          ) : (
+            <div className="text-xs text-muted-foreground italic px-3 py-2 border border-dashed rounded-md">Banner is empty — nothing will be shown.</div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
