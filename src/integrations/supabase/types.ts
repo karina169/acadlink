@@ -506,6 +506,7 @@ export type Database = {
       }
       posts: {
         Row: {
+          boosted_until: string | null
           content: string
           created_at: string
           id: string
@@ -514,6 +515,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          boosted_until?: string | null
           content: string
           created_at?: string
           id?: string
@@ -522,6 +524,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          boosted_until?: string | null
           content?: string
           created_at?: string
           id?: string
@@ -535,6 +538,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           bio: string | null
+          boosted_until: string | null
           created_at: string
           department: string | null
           display_name: string | null
@@ -549,6 +553,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           bio?: string | null
+          boosted_until?: string | null
           created_at?: string
           department?: string | null
           display_name?: string | null
@@ -563,6 +568,7 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           bio?: string | null
+          boosted_until?: string | null
           created_at?: string
           department?: string | null
           display_name?: string | null
@@ -631,6 +637,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      system_settings: {
+        Row: {
+          announcement_banner: string | null
+          default_post_tag: string
+          id: boolean
+          live_events_enabled: boolean
+          max_post_length: number
+          reels_enabled: boolean
+          registration_open: boolean
+          site_name: string
+          tagline: string
+          updated_at: string
+          voice_notes_enabled: boolean
+        }
+        Insert: {
+          announcement_banner?: string | null
+          default_post_tag?: string
+          id?: boolean
+          live_events_enabled?: boolean
+          max_post_length?: number
+          reels_enabled?: boolean
+          registration_open?: boolean
+          site_name?: string
+          tagline?: string
+          updated_at?: string
+          voice_notes_enabled?: boolean
+        }
+        Update: {
+          announcement_banner?: string | null
+          default_post_tag?: string
+          id?: boolean
+          live_events_enabled?: boolean
+          max_post_length?: number
+          reels_enabled?: boolean
+          registration_open?: boolean
+          site_name?: string
+          tagline?: string
+          updated_at?: string
+          voice_notes_enabled?: boolean
+        }
+        Relationships: []
       }
       timetable_entries: {
         Row: {
