@@ -7,8 +7,9 @@ import {
   BookOpen, Trash2, Plus, ChevronRight, Newspaper,
   Home, AlertTriangle, Search,
   RefreshCw, Edit, X, Check, MessageCircle, Image,
-  Clock, TrendingUp
+  Clock, TrendingUp, Rocket, Settings as SettingsIcon, BadgeCheck
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,16 +27,19 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-type AdminTab = "overview" | "users" | "posts" | "news" | "academics" | "groups" | "roles";
+type AdminTab = "overview" | "users" | "verify" | "posts" | "boost" | "news" | "academics" | "groups" | "roles" | "settings";
 
 const adminTabs: { key: AdminTab; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: BarChart3 },
   { key: "users", label: "Users", icon: Users },
+  { key: "verify", label: "Verify Users", icon: BadgeCheck },
   { key: "posts", label: "Posts", icon: FileText },
+  { key: "boost", label: "Boost / Viral", icon: Rocket },
   { key: "news", label: "Campus News", icon: Newspaper },
   { key: "academics", label: "Academics", icon: GraduationCap },
   { key: "groups", label: "Group Chats", icon: MessageCircle },
   { key: "roles", label: "User Roles", icon: Shield },
+  { key: "settings", label: "System Settings", icon: SettingsIcon },
 ];
 
 function AdminPage() {
@@ -155,11 +159,14 @@ function AdminPage() {
         <main className="flex-1 min-w-0 p-4 sm:p-6 pb-20 md:pb-6">
           {tab === "overview" && <OverviewPanel />}
           {tab === "users" && <UsersPanel />}
+          {tab === "verify" && <VerifyUsersPanel />}
           {tab === "posts" && <PostsPanel />}
+          {tab === "boost" && <BoostPanel />}
           {tab === "news" && <NewsPanel />}
           {tab === "academics" && <AcademicsPanel />}
           {tab === "groups" && <GroupsPanel />}
           {tab === "roles" && <RolesPanel />}
+          {tab === "settings" && <SystemSettingsPanel />}
         </main>
       </div>
     </div>
