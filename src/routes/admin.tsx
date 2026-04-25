@@ -7,7 +7,8 @@ import {
   BookOpen, Trash2, Plus, ChevronRight, Newspaper,
   Home, AlertTriangle, Search,
   RefreshCw, Edit, X, Check, MessageCircle, Image,
-  Clock, TrendingUp, Rocket, Settings as SettingsIcon, BadgeCheck
+  Clock, TrendingUp, Rocket, Settings as SettingsIcon, BadgeCheck,
+  Inbox, History
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
