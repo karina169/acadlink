@@ -312,6 +312,28 @@ function UsersPanel() {
                     <td className="px-4 py-3 text-muted-foreground">{u.level || "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{u.matric_number || "—"}</td>
                     <td className="px-4 py-3">
+                      <select
+                        value={u.account_type || "student"}
+                        onChange={async (e) => {
+                          const newType = e.target.value;
+                          const { error } = await supabase.from("profiles").update({ account_type: newType } as any).eq("user_id", u.user_id);
+                          if (error) return toast.error(error.message);
+                          await logAdminAction("profile.account_type", {
+                            target_type: "profile", target_id: u.id, target_user_id: u.user_id,
+                            metadata: { display_name: u.display_name, account_type: newType },
+                          });
+                          toast.success("Account type updated");
+                          loadUsers();
+                        }}
+                        className="h-7 text-[11px] px-2 rounded-md border border-input bg-transparent"
+                      >
+                        <option value="student">Student</option>
+                        <option value="lecturer">Lecturer</option>
+                        <option value="alumni">Alumni</option>
+                        <option value="staff">Staff</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-3">
                       <Button
                         size="sm"
                         variant={u.verified ? "default" : "outline"}
@@ -330,6 +352,9 @@ function UsersPanel() {
                       >
                         {u.verified ? <><X className="w-3 h-3" />Unverify</> : <><Check className="w-3 h-3" />Verify</>}
                       </Button>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <UserAccessEditor user={u} onChange={loadUsers} />
                     </td>
                   </tr>
                 ))}
