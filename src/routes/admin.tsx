@@ -1155,8 +1155,13 @@ function VerifyUsersPanel() {
   useEffect(() => { runSearch(); }, [runSearch]);
 
   const toggleVerify = async (u: any) => {
-    const { error } = await supabase.from("profiles").update({ verified: !u.verified }).eq("user_id", u.user_id);
+    const newVal = !u.verified;
+    const { error } = await supabase.from("profiles").update({ verified: newVal }).eq("user_id", u.user_id);
     if (error) return toast.error(error.message);
+    await logAdminAction(newVal ? "profile.verify" : "profile.unverify", {
+      target_type: "profile", target_id: u.id, target_user_id: u.user_id,
+      metadata: { display_name: u.display_name, source: "name_search" },
+    });
     toast.success(u.verified ? "Verification removed" : "Account verified ✓");
     setUsers(prev => prev.map(x => x.user_id === u.user_id ? { ...x, verified: !x.verified } : x));
   };
