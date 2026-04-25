@@ -569,6 +569,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_type: string
           avatar_url: string | null
           bio: string | null
           boosted_until: string | null
@@ -576,14 +577,17 @@ export type Database = {
           department: string | null
           display_name: string | null
           faculty: string | null
+          feature_overrides: Json
           id: string
           level: string | null
           matric_number: string | null
+          title: string | null
           updated_at: string
           user_id: string
           verified: boolean
         }
         Insert: {
+          account_type?: string
           avatar_url?: string | null
           bio?: string | null
           boosted_until?: string | null
@@ -591,14 +595,17 @@ export type Database = {
           department?: string | null
           display_name?: string | null
           faculty?: string | null
+          feature_overrides?: Json
           id?: string
           level?: string | null
           matric_number?: string | null
+          title?: string | null
           updated_at?: string
           user_id: string
           verified?: boolean
         }
         Update: {
+          account_type?: string
           avatar_url?: string | null
           bio?: string | null
           boosted_until?: string | null
@@ -606,12 +613,65 @@ export type Database = {
           department?: string | null
           display_name?: string | null
           faculty?: string | null
+          feature_overrides?: Json
           id?: string
           level?: string | null
           matric_number?: string | null
+          title?: string | null
           updated_at?: string
           user_id?: string
           verified?: boolean
+        }
+        Relationships: []
+      }
+      signup_invites: {
+        Row: {
+          account_type: string
+          active: boolean
+          consumed_at: string | null
+          consumed_by: string | null
+          created_at: string
+          created_by: string
+          expires_at: string | null
+          id: string
+          label: string | null
+          max_uses: number | null
+          single_use: boolean
+          token: string
+          updated_at: string
+          uses: number
+        }
+        Insert: {
+          account_type?: string
+          active?: boolean
+          consumed_at?: string | null
+          consumed_by?: string | null
+          created_at?: string
+          created_by: string
+          expires_at?: string | null
+          id?: string
+          label?: string | null
+          max_uses?: number | null
+          single_use?: boolean
+          token: string
+          updated_at?: string
+          uses?: number
+        }
+        Update: {
+          account_type?: string
+          active?: boolean
+          consumed_at?: string | null
+          consumed_by?: string | null
+          created_at?: string
+          created_by?: string
+          expires_at?: string | null
+          id?: string
+          label?: string | null
+          max_uses?: number | null
+          single_use?: boolean
+          token?: string
+          updated_at?: string
+          uses?: number
         }
         Relationships: []
       }

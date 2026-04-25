@@ -11,6 +11,8 @@ interface TopNavProps {
 const TopNav = ({ userInitials, onMenuToggle }: TopNavProps) => {
   const [notifCount, setNotifCount] = useState(0);
   const [showSearch, setShowSearch] = useState(false);
+  const [siteName, setSiteName] = useState("AcadLink");
+  const [tagline, setTagline] = useState("Sokoto State University");
 
   useEffect(() => {
     const load = async () => {
@@ -20,6 +22,22 @@ const TopNav = ({ userInitials, onMenuToggle }: TopNavProps) => {
       setNotifCount(count || 0);
     };
     load();
+
+    const loadSettings = async () => {
+      const { data } = await supabase.from("system_settings" as any).select("site_name, tagline").eq("id", true).maybeSingle();
+      if (data) {
+        const s = data as any;
+        if (s.site_name) setSiteName(s.site_name);
+        if (s.tagline) setTagline(s.tagline);
+      }
+    };
+    loadSettings();
+
+    const channel = supabase
+      .channel("system_settings_topnav")
+      .on("postgres_changes", { event: "*", schema: "public", table: "system_settings" }, () => loadSettings())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const handleLogout = async () => {
@@ -33,10 +51,10 @@ const TopNav = ({ userInitials, onMenuToggle }: TopNavProps) => {
           <Menu className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-2">
-          <img src={logo} alt="AcadLink" className="w-9 h-9 object-contain rounded-lg" />
+          <img src={logo} alt={siteName} className="w-9 h-9 object-contain rounded-lg" />
           <div className="leading-tight hidden sm:block">
-            <div className="text-base font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">AcadLink</div>
-            <div className="text-[10px] text-muted-foreground -mt-0.5 hidden md:block">Sokoto State University</div>
+            <div className="text-base font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">{siteName}</div>
+            <div className="text-[10px] text-muted-foreground -mt-0.5 hidden md:block">{tagline}</div>
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { LayoutDashboard, FileText, BookOpen, Calendar, GraduationCap, Building2, Users, Bell, Settings, HelpCircle, Newspaper, Shield, MessageCircle, BarChart3, FileType2 } from "lucide-react";
+import { LayoutDashboard, BookOpen, Calendar, GraduationCap, Building2, Users, Bell, Settings, HelpCircle, Newspaper, Shield, MessageCircle, BarChart3, FileType2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface NavItem {
@@ -7,6 +7,9 @@ interface NavItem {
   label: string;
   key: string;
 }
+
+// Keys considered "student-only" — auto-hidden for non-student account types
+const STUDENT_ONLY_KEYS = new Set(["past-questions", "handouts", "timetable", "results"]);
 
 const mainNav: NavItem[] = [
   { icon: LayoutDashboard, label: "Feed", key: "feed" },
@@ -43,28 +46,35 @@ interface LeftSidebarProps {
 
 const SidebarSection = ({ label, items, activePanel, onNavigate, notifCount }: {
   label: string; items: NavItem[]; activePanel: string; onNavigate: (key: string) => void; notifCount?: number;
-}) => (
-  <div className="mb-4">
-    <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-1">{label}</div>
-    {items.map((item) => (
-      <button key={item.key} onClick={() => onNavigate(item.key)}
-        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors border-none text-left cursor-pointer ${
-          activePanel === item.key
-            ? "bg-primary/10 text-primary font-semibold"
-            : "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
-        }`}>
-        <item.icon className="w-4 h-4 flex-shrink-0" />
-        <span className="flex-1">{item.label}</span>
-        {item.key === "notifications" && notifCount && notifCount > 0 ? (
-          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-destructive text-destructive-foreground">{notifCount}</span>
-        ) : null}
-      </button>
-    ))}
-  </div>
-);
+}) => {
+  if (items.length === 0) return null;
+  return (
+    <div className="mb-4">
+      <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-1">{label}</div>
+      {items.map((item) => (
+        <button key={item.key} onClick={() => onNavigate(item.key)}
+          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors border-none text-left cursor-pointer ${
+            activePanel === item.key
+              ? "bg-primary/10 text-primary font-semibold"
+              : "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground"
+          }`}>
+          <item.icon className="w-4 h-4 flex-shrink-0" />
+          <span className="flex-1">{item.label}</span>
+          {item.key === "notifications" && notifCount && notifCount > 0 ? (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-destructive text-destructive-foreground">{notifCount}</span>
+          ) : null}
+        </button>
+      ))}
+    </div>
+  );
+};
 
 const LeftSidebar = ({ activePanel, onNavigate, isOpen, onClose }: LeftSidebarProps) => {
-  const [profile, setProfile] = useState<{ display_name: string | null; department: string | null; avatar_url: string | null } | null>(null);
+  const [profile, setProfile] = useState<{
+    display_name: string | null; department: string | null; avatar_url: string | null;
+    account_type?: string | null; title?: string | null;
+    feature_overrides?: Record<string, boolean> | null;
+  } | null>(null);
   const [notifCount, setNotifCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -72,8 +82,10 @@ const LeftSidebar = ({ activePanel, onNavigate, isOpen, onClose }: LeftSidebarPr
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase.from("profiles").select("display_name, department, avatar_url").eq("user_id", user.id).single();
-      setProfile(data);
+      const { data } = await supabase.from("profiles")
+        .select("display_name, department, avatar_url, account_type, title, feature_overrides")
+        .eq("user_id", user.id).single();
+      setProfile(data as any);
       const { count } = await supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false);
       setNotifCount(count || 0);
       const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
@@ -83,6 +95,23 @@ const LeftSidebar = ({ activePanel, onNavigate, isOpen, onClose }: LeftSidebarPr
   }, []);
 
   const initials = profile?.display_name?.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) || "??";
+  const accountType = profile?.account_type || "student";
+  const overrides = (profile?.feature_overrides || {}) as Record<string, boolean>;
+
+  // Visibility rule:
+  // - explicit override (true/false) wins
+  // - else, student-only keys hidden for non-student accounts
+  const isVisible = (key: string) => {
+    if (key in overrides) return overrides[key] !== false;
+    if (STUDENT_ONLY_KEYS.has(key) && accountType !== "student") return false;
+    return true;
+  };
+
+  const filterItems = (items: NavItem[]) => items.filter(i => isVisible(i.key));
+  const subtitle = profile?.title?.trim()
+    || (accountType !== "student" ? (accountType === "lecturer" ? "Lecturer" : accountType === "alumni" ? "Alumnus" : "Member") : null)
+    || profile?.department
+    || "SSU";
 
   return (
     <>
@@ -97,15 +126,15 @@ const LeftSidebar = ({ activePanel, onNavigate, isOpen, onClose }: LeftSidebarPr
               </div>
               <div className="min-w-0">
                 <div className="font-semibold text-sm truncate">{profile?.display_name || "Student"}</div>
-                <div className="text-[11px] text-muted-foreground">{profile?.department || "SSU"}</div>
+                <div className="text-[11px] text-muted-foreground truncate">{subtitle}</div>
               </div>
             </div>
           </div>
 
-          <SidebarSection label="Main" items={mainNav} activePanel={activePanel} onNavigate={onNavigate} />
-          <SidebarSection label="Academics" items={academicsNav} activePanel={activePanel} onNavigate={onNavigate} />
-          <SidebarSection label="Community" items={communityNav} activePanel={activePanel} onNavigate={onNavigate} notifCount={notifCount} />
-          <SidebarSection label="Support" items={supportNav} activePanel={activePanel} onNavigate={onNavigate} />
+          <SidebarSection label="Main" items={filterItems(mainNav)} activePanel={activePanel} onNavigate={onNavigate} />
+          <SidebarSection label="Academics" items={filterItems(academicsNav)} activePanel={activePanel} onNavigate={onNavigate} />
+          <SidebarSection label="Community" items={filterItems(communityNav)} activePanel={activePanel} onNavigate={onNavigate} notifCount={notifCount} />
+          <SidebarSection label="Support" items={filterItems(supportNav)} activePanel={activePanel} onNavigate={onNavigate} />
           {isAdmin && (
             <SidebarSection label="Admin" items={[{ icon: Shield, label: "Admin Dashboard", key: "admin" }]} activePanel={activePanel} onNavigate={onNavigate} />
           )}
