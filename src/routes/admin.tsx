@@ -282,7 +282,9 @@ function UsersPanel() {
                   <th className="text-left px-4 py-3">Department</th>
                   <th className="text-left px-4 py-3">Level</th>
                   <th className="text-left px-4 py-3">Matric No.</th>
+                  <th className="text-left px-4 py-3">Type</th>
                   <th className="text-left px-4 py-3">Verified</th>
+                  <th className="text-right px-4 py-3">Access</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
