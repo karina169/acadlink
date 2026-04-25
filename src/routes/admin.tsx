@@ -1951,3 +1951,266 @@ function AuditLogPanel() {
     </div>
   );
 }
+
+// ============================================================
+// Pro Invites — admin generates lecturer/alumni signup links
+// ============================================================
+const FEATURE_KEYS: { key: string; label: string }[] = [
+  { key: "past-questions", label: "Past Questions" },
+  { key: "handouts", label: "Handouts" },
+  { key: "timetable", label: "Timetable" },
+  { key: "results", label: "Results" },
+  { key: "courses", label: "My Courses" },
+  { key: "departments", label: "Departments" },
+  { key: "course-chats", label: "Course Chats" },
+  { key: "study-groups", label: "Study Groups" },
+  { key: "events", label: "Events" },
+  { key: "campus-news", label: "Campus News" },
+];
+
+function generateToken() {
+  const arr = new Uint8Array(18);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(36).padStart(2, "0")).join("").slice(0, 24);
+}
+
+function InvitesPanel() {
+  const [invites, setInvites] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [accountType, setAccountType] = useState("lecturer");
+  const [label, setLabel] = useState("");
+  const [singleUse, setSingleUse] = useState(false);
+  const [maxUses, setMaxUses] = useState<string>("");
+  const [expiresAt, setExpiresAt] = useState<string>("");
+  const [creating, setCreating] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from("signup_invites" as any).select("*").order("created_at", { ascending: false }).limit(100);
+    setInvites((data as any[]) || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleCreate = async () => {
+    setCreating(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not signed in");
+      const token = generateToken();
+      const payload: any = {
+        token,
+        account_type: accountType,
+        label: label.trim() || null,
+        single_use: singleUse,
+        max_uses: !singleUse && maxUses ? parseInt(maxUses, 10) : null,
+        expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
+        created_by: user.id,
+      };
+      const { error } = await supabase.from("signup_invites" as any).insert(payload);
+      if (error) throw error;
+      await logAdminAction("invite.create", { target_type: "invite", metadata: { account_type: accountType, single_use: singleUse, label } });
+      toast.success("Invite link created");
+      setLabel(""); setMaxUses(""); setExpiresAt("");
+      load();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally { setCreating(false); }
+  };
+
+  const inviteUrl = (token: string) => `${window.location.origin}/join/${token}`;
+
+  const toggleActive = async (inv: any) => {
+    const { error } = await supabase.from("signup_invites" as any).update({ active: !inv.active } as any).eq("id", inv.id);
+    if (error) return toast.error(error.message);
+    await logAdminAction(inv.active ? "invite.disable" : "invite.enable", { target_type: "invite", target_id: inv.id });
+    load();
+  };
+
+  const remove = async (inv: any) => {
+    if (!confirm("Delete this invite link?")) return;
+    const { error } = await supabase.from("signup_invites" as any).delete().eq("id", inv.id);
+    if (error) return toast.error(error.message);
+    await logAdminAction("invite.delete", { target_type: "invite", target_id: inv.id });
+    toast.success("Invite deleted");
+    load();
+  };
+
+  return (
+    <div>
+      <h1 className="text-xl font-bold mb-1">Professional Invites</h1>
+      <p className="text-sm text-muted-foreground mb-5">Generate signup links for lecturers, alumni, and other non-student accounts. Their signup form skips faculty and level.</p>
+
+      <Card className="mb-6">
+        <CardHeader><CardTitle className="text-sm">Create new invite link</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1">Account type</label>
+              <select value={accountType} onChange={e => setAccountType(e.target.value)} className="w-full h-9 px-3 rounded-md border border-input bg-transparent text-sm">
+                <option value="lecturer">Lecturer</option>
+                <option value="alumni">Alumni</option>
+                <option value="staff">Staff</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">Label / note (optional)</label>
+              <Input value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. CS Faculty Q1 invites" className="h-9 text-sm" />
+            </div>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="flex items-center gap-2 text-sm">
+              <Switch checked={singleUse} onCheckedChange={setSingleUse} />
+              Single-use token
+            </label>
+            {!singleUse && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Max uses:</span>
+                <Input type="number" min={1} value={maxUses} onChange={e => setMaxUses(e.target.value)} placeholder="∞" className="h-8 w-20 text-sm" />
+              </div>
+            )}
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Expires:</span>
+              <Input type="datetime-local" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} className="h-8 text-sm" />
+            </div>
+          </div>
+          <Button size="sm" onClick={handleCreate} disabled={creating} className="gap-1.5">
+            <Plus className="w-3.5 h-3.5" />{creating ? "Creating..." : "Generate invite link"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {loading ? (
+        <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+      ) : invites.length === 0 ? (
+        <p className="text-center text-sm text-muted-foreground py-8">No invites yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {invites.map(inv => {
+            const url = inviteUrl(inv.token);
+            const expired = inv.expires_at && new Date(inv.expires_at) < new Date();
+            const exhausted = inv.max_uses && inv.uses >= inv.max_uses;
+            const isLive = inv.active && !expired && !exhausted;
+            return (
+              <Card key={inv.id} className="p-3">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant={isLive ? "default" : "secondary"} className="text-[10px]">
+                        {isLive ? "Active" : !inv.active ? "Disabled" : expired ? "Expired" : "Exhausted"}
+                      </Badge>
+                      <Badge variant="outline" className="text-[10px] capitalize">{inv.account_type}</Badge>
+                      {inv.single_use && <Badge variant="outline" className="text-[10px]">Single-use</Badge>}
+                      {inv.label && <span className="text-xs text-muted-foreground">{inv.label}</span>}
+                    </div>
+                    <div className="mt-1.5 font-mono text-xs bg-muted px-2 py-1 rounded truncate">{url}</div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      Used {inv.uses}{inv.max_uses ? ` / ${inv.max_uses}` : ""}
+                      {inv.expires_at && <> · Expires {new Date(inv.expires_at).toLocaleString()}</>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button size="sm" variant="outline" className="h-8 gap-1 text-[11px]" onClick={() => { navigator.clipboard.writeText(url); toast.success("Link copied"); }}>
+                      <Copy className="w-3 h-3" /> Copy
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 gap-1 text-[11px]" onClick={() => toggleActive(inv)}>
+                      {inv.active ? <><EyeOff className="w-3 h-3" /> Disable</> : <><Eye className="w-3 h-3" /> Enable</>}
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-[11px] text-destructive hover:text-destructive" onClick={() => remove(inv)}>
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// Per-account feature override editor
+// ============================================================
+function UserAccessEditor({ user, onChange }: { user: any; onChange: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [overrides, setOverrides] = useState<Record<string, boolean>>(user.feature_overrides || {});
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setOverrides(user.feature_overrides || {}); }, [user.feature_overrides, open]);
+
+  const accountType = user.account_type || "student";
+  const studentDefaults = new Set(["past-questions", "handouts", "timetable", "results"]);
+  const effectiveValue = (key: string) => {
+    if (key in overrides) return overrides[key];
+    if (studentDefaults.has(key) && accountType !== "student") return false;
+    return true;
+  };
+
+  const setKey = (key: string, val: boolean) => {
+    setOverrides(prev => ({ ...prev, [key]: val }));
+  };
+  const reset = (key: string) => {
+    setOverrides(prev => { const next = { ...prev }; delete next[key]; return next; });
+  };
+
+  const save = async () => {
+    setSaving(true);
+    const { error } = await supabase.from("profiles").update({ feature_overrides: overrides } as any).eq("user_id", user.user_id);
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    await logAdminAction("profile.feature_overrides", { target_type: "profile", target_id: user.id, target_user_id: user.user_id, metadata: { overrides } });
+    toast.success("Access updated");
+    setOpen(false);
+    onChange();
+  };
+
+  if (!open) {
+    return (
+      <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1" onClick={() => setOpen(true)}>
+        <SettingsIcon className="w-3 h-3" /> Access
+      </Button>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-foreground/40 flex items-center justify-center p-4" onClick={() => setOpen(false)}>
+      <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-md max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-sm">Manage access</h3>
+            <p className="text-xs text-muted-foreground">{user.display_name || "User"} · {accountType}</p>
+          </div>
+          <button onClick={() => setOpen(false)} className="p-1.5 rounded-md hover:bg-muted bg-transparent border-none cursor-pointer"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="p-4 space-y-2">
+          <p className="text-[11px] text-muted-foreground mb-2">Override which sections this user sees in their sidebar. Reset uses the default for their account type.</p>
+          {FEATURE_KEYS.map(f => {
+            const overridden = f.key in overrides;
+            const value = effectiveValue(f.key);
+            return (
+              <div key={f.key} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-md hover:bg-muted/40">
+                <div className="text-sm">
+                  {f.label}
+                  {overridden && <span className="ml-1.5 text-[10px] text-primary">(custom)</span>}
+                </div>
+                <div className="flex items-center gap-2">
+                  {overridden && (
+                    <button onClick={() => reset(f.key)} className="text-[10px] text-muted-foreground hover:text-foreground bg-transparent border-none cursor-pointer">reset</button>
+                  )}
+                  <Switch checked={value} onCheckedChange={(v) => setKey(f.key, v)} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="p-4 border-t border-border flex justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button size="sm" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
