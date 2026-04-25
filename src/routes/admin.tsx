@@ -1554,3 +1554,361 @@ function AnnouncementBannerEditor({ s, setS }: { s: any; setS: (v: any) => void 
   );
 }
 
+// ============== AUDIT LOG HELPER ==============
+async function logAdminAction(action: string, opts: {
+  target_type?: string;
+  target_id?: string | null;
+  target_user_id?: string | null;
+  metadata?: Record<string, any>;
+} = {}) {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from("admin_audit_log").insert({
+      actor_id: user.id,
+      action,
+      target_type: opts.target_type ?? null,
+      target_id: opts.target_id ?? null,
+      target_user_id: opts.target_user_id ?? null,
+      metadata: opts.metadata ?? {},
+    });
+  } catch (e) {
+    console.warn("audit log failed", e);
+  }
+}
+
+// ============== VERIFICATION QUEUE PANEL ==============
+type VerifReq = {
+  id: string;
+  user_id: string;
+  full_name: string;
+  matric_number: string | null;
+  department: string | null;
+  level: string | null;
+  reason: string | null;
+  evidence_url: string | null;
+  status: "pending" | "approved" | "rejected";
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+  created_at: string;
+};
+
+function VerificationQueuePanel() {
+  const [requests, setRequests] = useState<VerifReq[]>([]);
+  const [profiles, setProfiles] = useState<Record<string, any>>({});
+  const [filter, setFilter] = useState<"pending" | "approved" | "rejected" | "all">("pending");
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [noteDraft, setNoteDraft] = useState<Record<string, string>>({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    let q = supabase.from("verification_requests").select("*").order("created_at", { ascending: false }).limit(200);
+    if (filter !== "all") q = q.eq("status", filter);
+    const { data } = await q;
+    const reqs = (data || []) as VerifReq[];
+    setRequests(reqs);
+
+    const userIds = Array.from(new Set(reqs.map(r => r.user_id)));
+    if (userIds.length) {
+      const { data: profs } = await supabase.from("profiles")
+        .select("user_id, display_name, avatar_url, verified, matric_number, department, level")
+        .in("user_id", userIds);
+      const map: Record<string, any> = {};
+      (profs || []).forEach((p: any) => { map[p.user_id] = p; });
+      setProfiles(map);
+    }
+    setLoading(false);
+  }, [filter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const counts = {
+    pending: requests.filter(r => r.status === "pending").length,
+    all: requests.length,
+  };
+
+  const handleApprove = async (req: VerifReq) => {
+    const notes = noteDraft[req.id]?.trim() || null;
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error: e1 } = await supabase.from("verification_requests").update({
+      status: "approved",
+      reviewed_by: user?.id,
+      reviewed_at: new Date().toISOString(),
+      review_notes: notes,
+    }).eq("id", req.id);
+    if (e1) return toast.error(e1.message);
+
+    const { error: e2 } = await supabase.from("profiles").update({ verified: true }).eq("user_id", req.user_id);
+    if (e2) return toast.error("Approved but failed to mark profile: " + e2.message);
+
+    await logAdminAction("verification.approve", {
+      target_type: "verification_request",
+      target_id: req.id,
+      target_user_id: req.user_id,
+      metadata: { full_name: req.full_name, notes },
+    });
+    toast.success(`Approved ${req.full_name}`);
+    load();
+  };
+
+  const handleReject = async (req: VerifReq) => {
+    const notes = noteDraft[req.id]?.trim();
+    if (!notes) return toast.error("Add a rejection reason in the notes field first.");
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from("verification_requests").update({
+      status: "rejected",
+      reviewed_by: user?.id,
+      reviewed_at: new Date().toISOString(),
+      review_notes: notes,
+    }).eq("id", req.id);
+    if (error) return toast.error(error.message);
+
+    await logAdminAction("verification.reject", {
+      target_type: "verification_request",
+      target_id: req.id,
+      target_user_id: req.user_id,
+      metadata: { full_name: req.full_name, notes },
+    });
+    toast.success(`Rejected ${req.full_name}`);
+    load();
+  };
+
+  const handleReopen = async (req: VerifReq) => {
+    const { error } = await supabase.from("verification_requests").update({
+      status: "pending",
+      reviewed_by: null,
+      reviewed_at: null,
+    }).eq("id", req.id);
+    if (error) return toast.error(error.message);
+    await logAdminAction("verification.reopen", {
+      target_type: "verification_request",
+      target_id: req.id,
+      target_user_id: req.user_id,
+    });
+    toast.success("Returned to queue");
+    load();
+  };
+
+  const filtered = requests.filter(r => {
+    const s = search.trim().toLowerCase();
+    if (!s) return true;
+    return r.full_name.toLowerCase().includes(s) ||
+      (r.matric_number || "").toLowerCase().includes(s) ||
+      (r.department || "").toLowerCase().includes(s);
+  });
+
+  return (
+    <div>
+      <div className="mb-4">
+        <h1 className="text-xl font-bold flex items-center gap-2">
+          <Inbox className="w-5 h-5 text-primary" /> Verification Queue
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Review user-submitted verification requests. Approving grants the blue badge automatically.
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        {(["pending", "approved", "rejected", "all"] as const).map(f => (
+          <Button
+            key={f}
+            size="sm"
+            variant={filter === f ? "default" : "outline"}
+            className="h-8 capitalize"
+            onClick={() => setFilter(f)}
+          >
+            {f}
+            {f === "pending" && counts.pending > 0 && (
+              <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px]">{counts.pending}</Badge>
+            )}
+          </Button>
+        ))}
+        <div className="relative ml-auto">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input placeholder="Search name, matric, department…" value={search}
+            onChange={e => setSearch(e.target.value)} className="pl-8 h-9 w-[260px] text-sm" />
+        </div>
+        <Button size="sm" variant="outline" onClick={load}><RefreshCw className="w-3.5 h-3.5" /></Button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+      ) : filtered.length === 0 ? (
+        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No verification requests.</CardContent></Card>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map(req => {
+            const prof = profiles[req.user_id];
+            return (
+              <Card key={req.id}>
+                <CardContent className="pt-4 pb-4 px-4">
+                  <div className="flex items-start gap-3">
+                    {prof?.avatar_url ? (
+                      <img src={prof.avatar_url} alt="" className="w-11 h-11 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <div className="w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
+                        {(req.full_name || "?").slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold">{req.full_name}</span>
+                        {prof?.verified && <BadgeCheck className="w-4 h-4 fill-[#1d9bf0] text-white" />}
+                        <Badge variant={req.status === "pending" ? "secondary" : req.status === "approved" ? "default" : "destructive"} className="text-[10px] capitalize">
+                          {req.status}
+                        </Badge>
+                        <span className="text-[11px] text-muted-foreground ml-auto">{new Date(req.created_at).toLocaleString()}</span>
+                      </div>
+                      <div className="text-[12px] text-muted-foreground mt-0.5">
+                        {req.matric_number || "—"} · {req.department || "—"} · {req.level || "—"}
+                      </div>
+                      {req.reason && (
+                        <p className="text-sm mt-2 bg-muted/40 rounded-md px-2.5 py-1.5 whitespace-pre-wrap">{req.reason}</p>
+                      )}
+                      {req.evidence_url && (
+                        <a href={req.evidence_url} target="_blank" rel="noopener noreferrer"
+                          className="text-xs text-primary underline mt-1.5 inline-block break-all">
+                          Evidence: {req.evidence_url}
+                        </a>
+                      )}
+                      {req.status !== "pending" && req.review_notes && (
+                        <div className="mt-2 text-xs">
+                          <span className="text-muted-foreground">Reviewer notes: </span>
+                          <span className="text-foreground">{req.review_notes}</span>
+                        </div>
+                      )}
+
+                      {req.status === "pending" ? (
+                        <div className="mt-3 space-y-2">
+                          <Textarea
+                            placeholder="Optional notes (required for rejection)"
+                            value={noteDraft[req.id] || ""}
+                            onChange={e => setNoteDraft(d => ({ ...d, [req.id]: e.target.value }))}
+                            className="text-xs min-h-[60px]"
+                          />
+                          <div className="flex items-center gap-2">
+                            <Button size="sm" className="h-8 gap-1" onClick={() => handleApprove(req)}>
+                              <Check className="w-3.5 h-3.5" /> Approve
+                            </Button>
+                            <Button size="sm" variant="destructive" className="h-8 gap-1" onClick={() => handleReject(req)}>
+                              <X className="w-3.5 h-3.5" /> Reject
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-2">
+                          <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1" onClick={() => handleReopen(req)}>
+                            <RefreshCw className="w-3 h-3" /> Reopen
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============== AUDIT LOG PANEL ==============
+function AuditLogPanel() {
+  const [entries, setEntries] = useState<any[]>([]);
+  const [actors, setActors] = useState<Record<string, any>>({});
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from("admin_audit_log").select("*").order("created_at", { ascending: false }).limit(200);
+    const rows = data || [];
+    setEntries(rows);
+    const ids = Array.from(new Set(rows.flatMap((r: any) => [r.actor_id, r.target_user_id]).filter(Boolean)));
+    if (ids.length) {
+      const { data: profs } = await supabase.from("profiles").select("user_id, display_name, avatar_url").in("user_id", ids);
+      const map: Record<string, any> = {};
+      (profs || []).forEach((p: any) => { map[p.user_id] = p; });
+      setActors(map);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = entries.filter((e: any) => {
+    const s = search.trim().toLowerCase();
+    if (!s) return true;
+    const actor = actors[e.actor_id]?.display_name || "";
+    const target = actors[e.target_user_id]?.display_name || "";
+    return e.action.toLowerCase().includes(s) || actor.toLowerCase().includes(s) || target.toLowerCase().includes(s);
+  });
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2"><History className="w-5 h-5 text-primary" /> Audit Log</h1>
+          <p className="text-sm text-muted-foreground">{entries.length} most recent admin actions</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input placeholder="Filter by action or name…" value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-9 w-[240px] text-sm" />
+          </div>
+          <Button size="sm" variant="outline" onClick={load}><RefreshCw className="w-3.5 h-3.5" /></Button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+      ) : filtered.length === 0 ? (
+        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No audit entries.</CardContent></Card>
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider border-b border-border bg-muted/30">
+                  <th className="text-left px-4 py-3">When</th>
+                  <th className="text-left px-4 py-3">Actor</th>
+                  <th className="text-left px-4 py-3">Action</th>
+                  <th className="text-left px-4 py-3">Target</th>
+                  <th className="text-left px-4 py-3">Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filtered.map((e: any) => {
+                  const actor = actors[e.actor_id];
+                  const target = actors[e.target_user_id];
+                  return (
+                    <tr key={e.id} className="hover:bg-muted/20 align-top">
+                      <td className="px-4 py-3 text-[11px] text-muted-foreground whitespace-nowrap">{new Date(e.created_at).toLocaleString()}</td>
+                      <td className="px-4 py-3">{actor?.display_name || <span className="text-muted-foreground font-mono text-[11px]">{e.actor_id.slice(0, 8)}</span>}</td>
+                      <td className="px-4 py-3"><Badge variant="outline" className="text-[10px] font-mono">{e.action}</Badge></td>
+                      <td className="px-4 py-3 text-[12px]">
+                        {target?.display_name || (e.target_user_id ? <span className="text-muted-foreground font-mono text-[11px]">{e.target_user_id.slice(0, 8)}</span> : "—")}
+                        {e.target_type && <div className="text-[10px] text-muted-foreground">{e.target_type}</div>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {e.metadata && Object.keys(e.metadata).length > 0 ? (
+                          <pre className="text-[10px] bg-muted/40 rounded p-1.5 max-w-[260px] overflow-x-auto whitespace-pre-wrap break-words">
+{JSON.stringify(e.metadata, null, 0)}
+                          </pre>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
