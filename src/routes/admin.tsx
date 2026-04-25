@@ -164,6 +164,8 @@ function AdminPage() {
           {tab === "overview" && <OverviewPanel />}
           {tab === "users" && <UsersPanel />}
           {tab === "verify" && <VerifyUsersPanel />}
+          {tab === "verifyqueue" && <VerificationQueuePanel />}
+          {tab === "audit" && <AuditLogPanel />}
           {tab === "posts" && <PostsPanel />}
           {tab === "boost" && <BoostPanel />}
           {tab === "news" && <NewsPanel />}
