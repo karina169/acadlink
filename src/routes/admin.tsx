@@ -29,7 +29,7 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-type AdminTab = "overview" | "users" | "verify" | "verifyqueue" | "audit" | "posts" | "boost" | "news" | "academics" | "groups" | "roles" | "settings";
+type AdminTab = "overview" | "users" | "verify" | "verifyqueue" | "audit" | "invites" | "posts" | "boost" | "news" | "academics" | "groups" | "roles" | "settings";
 
 const adminTabs: { key: AdminTab; label: string; icon: React.ElementType }[] = [
   { key: "overview", label: "Overview", icon: BarChart3 },
@@ -37,6 +37,7 @@ const adminTabs: { key: AdminTab; label: string; icon: React.ElementType }[] = [
   { key: "verify", label: "Verify Users", icon: BadgeCheck },
   { key: "verifyqueue", label: "Verify Queue", icon: Inbox },
   { key: "audit", label: "Audit Log", icon: History },
+  { key: "invites", label: "Pro Invites", icon: LinkIcon },
   { key: "posts", label: "Posts", icon: FileText },
   { key: "boost", label: "Boost / Viral", icon: Rocket },
   { key: "news", label: "Campus News", icon: Newspaper },
