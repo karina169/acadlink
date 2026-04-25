@@ -51,10 +51,10 @@ const TopNav = ({ userInitials, onMenuToggle }: TopNavProps) => {
           <Menu className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-2">
-          <img src={logo} alt="AcadLink" className="w-9 h-9 object-contain rounded-lg" />
+          <img src={logo} alt={siteName} className="w-9 h-9 object-contain rounded-lg" />
           <div className="leading-tight hidden sm:block">
-            <div className="text-base font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">AcadLink</div>
-            <div className="text-[10px] text-muted-foreground -mt-0.5 hidden md:block">Sokoto State University</div>
+            <div className="text-base font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">{siteName}</div>
+            <div className="text-[10px] text-muted-foreground -mt-0.5 hidden md:block">{tagline}</div>
           </div>
         </div>
       </div>
