@@ -11,6 +11,8 @@ interface TopNavProps {
 const TopNav = ({ userInitials, onMenuToggle }: TopNavProps) => {
   const [notifCount, setNotifCount] = useState(0);
   const [showSearch, setShowSearch] = useState(false);
+  const [siteName, setSiteName] = useState("AcadLink");
+  const [tagline, setTagline] = useState("Sokoto State University");
 
   useEffect(() => {
     const load = async () => {
@@ -20,6 +22,22 @@ const TopNav = ({ userInitials, onMenuToggle }: TopNavProps) => {
       setNotifCount(count || 0);
     };
     load();
+
+    const loadSettings = async () => {
+      const { data } = await supabase.from("system_settings" as any).select("site_name, tagline").eq("id", true).maybeSingle();
+      if (data) {
+        const s = data as any;
+        if (s.site_name) setSiteName(s.site_name);
+        if (s.tagline) setTagline(s.tagline);
+      }
+    };
+    loadSettings();
+
+    const channel = supabase
+      .channel("system_settings_topnav")
+      .on("postgres_changes", { event: "*", schema: "public", table: "system_settings" }, () => loadSettings())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const handleLogout = async () => {
