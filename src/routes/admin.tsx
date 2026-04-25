@@ -313,8 +313,13 @@ function UsersPanel() {
                         variant={u.verified ? "default" : "outline"}
                         className="h-7 text-[11px] gap-1"
                         onClick={async () => {
-                          const { error } = await supabase.from("profiles").update({ verified: !u.verified }).eq("user_id", u.user_id);
+                          const newVal = !u.verified;
+                          const { error } = await supabase.from("profiles").update({ verified: newVal }).eq("user_id", u.user_id);
                           if (error) return toast.error(error.message);
+                          await logAdminAction(newVal ? "profile.verify" : "profile.unverify", {
+                            target_type: "profile", target_id: u.id, target_user_id: u.user_id,
+                            metadata: { display_name: u.display_name },
+                          });
                           toast.success(u.verified ? "Unverified" : "Verified");
                           loadUsers();
                         }}
